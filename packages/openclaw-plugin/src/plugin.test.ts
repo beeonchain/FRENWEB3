@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApi } from "@fren/engine";
-import { buildTestFren } from "../../engine/src/testing.js";
+import { buildTestFren, optionName } from "../../engine/src/testing.js";
 import plugin, { TOOL_NAMES } from "./index.js";
 
 type Registered = { tools: Map<string, (ctx: Record<string, unknown>) => any>; commands: Map<string, any> };
@@ -25,7 +25,8 @@ describe("OpenClaw plugin against a real engine", () => {
   const tokenFile = join(dir, "api-token");
   writeFileSync(tokenFile, "plugin-test-token");
   // No private line: codes must go out via delivery.send.
-  const { fren } = buildTestFren({ privateLine: false });
+  const t = buildTestFren({ privateLine: false });
+  const { fren } = t;
   const server = createApi(fren, "plugin-test-token");
   let reg: Registered;
 
@@ -87,6 +88,17 @@ describe("OpenClaw plugin against a real engine", () => {
     const ok = reg.commands.get("ok");
     expect((await ok.handler({ senderIsOwner: false, args: code })).text).toMatch(/Only the owner/);
     expect((await ok.handler({ senderIsOwner: true, args: code })).text).toMatch(/Longed .* xyz:GOLD/);
+  });
+
+  it("quotes a price bet both ways and hands the model plans it can submit unchanged", async () => {
+    const by = new Date(Date.now() + 60 * 86_400_000);
+    t.fake.addOption(optionName("ETH", 55, 4000), { ask: 120, bid: 110, spot: 3_500 });
+    t.poly.addMarket({ slug: "eth-4k", question: "Will Ethereum reach $4,000 by December 31?", endDate: by.toISOString(), yesAsk: 0.3 });
+    const out = await run("fren_bet_quote", { asset: "ETH", target: 4000, direction: "above", by: by.toISOString().slice(0, 10), budgetUsd: 50 });
+    expect(out).toMatch(/1\) Option on Derive: 0\.41 contracts of the ETH \$4,000 call/);
+    expect(out).toMatch(/2\) Polymarket: "Will Ethereum reach \$4,000 by December 31\?"/);
+    const plan = JSON.parse(/^polymarket: (.*)$/m.exec(out)![1]!);
+    expect(await run("fren_trade", { plan })).toMatch(/📝 Paper: Bought 167 "Yes" shares/);
   });
 
   it("stops everything from the /stop command", async () => {

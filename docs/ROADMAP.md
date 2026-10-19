@@ -11,16 +11,16 @@ What works today, and what's next to cover everything in the brief, plus a few t
 - Jupiter spot buys and sells (ticker → verified token only; any contract address with an unverified warning plus confirmation)
 - Watcher with restart-safe SQLite state; paper stops, targets and liquidations
 - Paper mode at real prices
-- OpenClaw plugin: 8 tools, 7 owner commands, and the agent skill
+- OpenClaw plugin: 10 tools, 7 owner commands, and the agent skill
 - Meme coins: pump.fun coins on their bonding curve (official pump.fun SDK) and after they graduate (Jupiter); launch snipes that fire within ~2s of a token trading, with a Jito tip on Solana; tokens on Base, Robinhood Chain and Arbitrum through Relay, paid from USDC on Arbitrum or Base
+- Bets on a price by a date: "ETH hits $4,000 by December, $1,000" quotes the nearest call (or put) on Derive with its payoff, and the best matching Polymarket market, side by side; the owner picks one. Buying and selling options on Derive (option-only session key), buying and selling Polymarket shares (Polymarket's SDK, signed by Fren's signer), paper settlement of both, and funding either from Arbitrum USDC with an owner code
 
 ## Next, in order
 
 1. **Live testnet run.** Fund a Hyperliquid testnet account and run the whole flow through Telegram. Fix whatever reality disagrees with.
-2. **Options (Derive).** Add a `derive` venue: map "ETH ≥ $4,000 by December, $1,000" to the nearest listed call and expiry, and quote it next to a Polymarket alternative. Needs an EVM session key on Derive and a signer rule for Derive actions.
-3. **Prediction markets (Polymarket).** CLOB client and a Polygon proxy wallet. The agent offers it when a binary bet fits better than an option.
-4. **More meme coin reach.** Pay for Base and Robinhood Chain buys from Solana USDC through Relay (needs Relay's Solana transaction format checked against the signer), price triggers on EVM tokens, and launch detection from the deployer's first transaction rather than polling.
-5. **Yield.** "Put idle USDC to work": compare Kamino and Jupiter Lend on Solana and Aave on Arbitrum, deposit to the best, and withdraw automatically when a trade needs the cash.
-6. **More conditions.** Wallet activity (Helius webhooks), X mentions (firehose vendor), Polymarket odds, Fear & Greed.
-7. **Reach.** One-command installer, Docker compose, VPS self-provisioning on a crypto-paid host (EQVPS), WhatsApp, backup and restore.
-8. **Hardening.** Separate OS users by default, a Squads spending-limit wallet on Solana, RPC failover, partial fills, signed releases.
+2. **Live options and bets.** A small real order on Derive and on Polymarket, then option spreads (cheaper bets on a range), Polymarket markets on anything, not just prices ("bet $50 the Fed cuts in December"), and cash-outs back to Arbitrum.
+3. **More meme coin reach.** Pay for Base and Robinhood Chain buys from Solana USDC through Relay (needs Relay's Solana transaction format checked against the signer), price triggers on EVM tokens, and launch detection from the deployer's first transaction rather than polling.
+4. **Yield.** "Put idle USDC to work": compare Kamino and Jupiter Lend on Solana and Aave on Arbitrum, deposit to the best, and withdraw automatically when a trade needs the cash.
+5. **More conditions.** Wallet activity (Helius webhooks), X mentions (firehose vendor), Polymarket odds, Fear & Greed.
+6. **Reach.** One-command installer, Docker compose, VPS self-provisioning on a crypto-paid host (EQVPS), WhatsApp, backup and restore.
+7. **Hardening.** Separate OS users by default, a Squads spending-limit wallet on Solana, RPC failover, partial fills, signed releases.

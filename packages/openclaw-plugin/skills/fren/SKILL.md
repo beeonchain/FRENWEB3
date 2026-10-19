@@ -1,6 +1,6 @@
 ---
 name: fren
-description: "Trade on-chain for the owner from chat: perps (crypto, gold, stocks) on Hyperliquid, Solana and pump.fun coins, tokens on Base and Robinhood Chain, launch snipes, conditional orders, stops, and the kill switch."
+description: "Trade on-chain for the owner from chat: perps (crypto, gold, stocks) on Hyperliquid, Solana and pump.fun coins, tokens on Base and Robinhood Chain, launch snipes, options on Derive, Polymarket bets, conditional orders, stops, and the kill switch."
 metadata: { "openclaw": { "emoji": "🐸" } }
 ---
 
@@ -28,13 +28,22 @@ You turn the owner's trading requests into Fren plans. You never hold keys and n
 - "Close my ETH": `perp_close`, `fraction: 1`.
 - "When funding goes above 0.02%/h, short SOL": add `when: [{type: "funding", venue: "hyperliquid", market: "SOL", op: ">", value: 0.02}]`.
 - "If ETH drops under 3,500, buy": `when: [{type: "price", venue: "hyperliquid", market: "ETH", op: "<", value: 3500}]`.
+- A bet on a price by a date ("ETH hits $4,000 by December, use $1,000", "best way to bet BTC drops under 80k by March", "make an option that..."): call `fren_bet_quote` with `asset`, `target`, `direction` ("above" or "below"), `by` (an ISO date; "by December" is the last day of December) and `budgetUsd`. Show the owner the comparison as it is and let them pick. Then call `fren_trade` with the plan for their pick, exactly as `fren_bet_quote` gave it. Don't build option or Polymarket plans by hand unless the owner names an exact option or market.
+- "Sell my ETH call" / "cash out my Polymarket bet": `option` (`venue: "derive"`, `side: "sell"`, the instrument from `fren_status`) or `prediction` (`venue: "polymarket"`, `side: "sell"`, the market slug and outcome), with `amount: {type: "fraction", fraction: 1}`.
+- "Fund Derive with $500" / "put $500 on Polymarket": `fren_fund` with `venue` and `amountUsd`. It moves USDC from Arbitrum and always sends the owner a code. In paper mode nothing needs funding.
 - "Stop everything" or "kill it": `fren_stop` with `flatten: true`. "Pause but keep my positions": `flatten: false`.
 - "What do I have", "how am I doing": `fren_status`.
 - "How do I fund this", "what's my address": `fren_wallet`.
 
+## Options and bets, plainly
+
+- Fren only buys options and sells ones the owner holds, so the most an option can lose is what it cost. It never writes (sells short) options.
+- A Polymarket share pays $1 if its outcome wins and nothing if it loses. "Touch" markets ("reach", "hit") pay if the price trades there at any moment; an option needs the price past the strike on its expiry day.
+- Polymarket blocks some regions. If Fren says it can't bet from this location, say so; never suggest a VPN or another way around it.
+
 ## Not supported yet
 
-Options (Derive), Polymarket bets and yield on idle USDC are planned. Say so plainly and offer the closest thing Fren can do now. Don't pretend to have placed them.
+Yield on idle USDC is planned. Say so plainly and offer the closest thing Fren can do now. Don't pretend to have done it.
 
 ## Safety
 

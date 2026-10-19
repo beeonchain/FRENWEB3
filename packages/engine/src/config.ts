@@ -14,6 +14,8 @@ export const FrenConfig = z.object({
   /** Relay API, for tokens on Base, Robinhood Chain and Arbitrum. */
   relayApiUrl: z.string().url().optional(),
   relayApiKey: z.string().optional(),
+  /** Derive (options) API base; defaults to mainnet or testnet by network. */
+  deriveApiUrl: z.string().url().optional(),
   /** RPC overrides for EVM chains. */
   evmRpcUrls: z.object({ base: z.string().url(), robinhood: z.string().url(), arbitrum: z.string().url() }).partial().default({}),
   /** Jito tip on launch snipes, in lamports (0.001 SOL default; the signer refuses more than 0.01 SOL). */
@@ -75,4 +77,9 @@ export function relayApiUrl(cfg: FrenConfig): string {
 export function hyperliquidApiUrl(cfg: FrenConfig): string {
   if (cfg.hyperliquidApiUrl) return cfg.hyperliquidApiUrl;
   return cfg.network === "mainnet" ? "https://api.hyperliquid.xyz" : "https://api.hyperliquid-testnet.xyz";
+}
+
+export function deriveApiUrl(cfg: FrenConfig): string {
+  if (cfg.deriveApiUrl) return cfg.deriveApiUrl;
+  return cfg.network === "mainnet" ? "https://api.derive.xyz/v3" : "https://testnet.api.derive.xyz/v3";
 }

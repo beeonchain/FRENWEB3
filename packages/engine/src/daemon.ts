@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { SignerProcess, type SignerApi } from "@fren/signer";
 import { createApi } from "./api.js";
 import { Connection } from "@solana/web3.js";
-import { hyperliquidApiUrl, frenPaths, loadConfig, relayApiUrl, type FrenConfig, type FrenPaths } from "./config.js";
+import { deriveApiUrl, hyperliquidApiUrl, frenPaths, loadConfig, relayApiUrl, type FrenConfig, type FrenPaths } from "./config.js";
 import { Fren } from "./engine.js";
 import type { Fetch } from "./http.js";
 import { TelegramNotifier } from "./notify.js";
@@ -11,6 +11,9 @@ import { HyperliquidVenue } from "./venues/hyperliquid.js";
 import { JupiterVenue } from "./venues/jupiter.js";
 import { OnlinePumpFun } from "./venues/pumpfun.js";
 import { RelayVenue } from "./venues/relay.js";
+import { DeriveVenue } from "./venues/derive.js";
+import { PolymarketVenue } from "./venues/polymarket.js";
+import { polymarketGeoblock, SdkPolymarketData, SdkPolymarketTrader } from "./venues/polymarket-sdk.js";
 
 export interface BuildOptions {
   config: FrenConfig;
@@ -22,12 +25,13 @@ export interface BuildOptions {
 /** Wire the engine from its parts. Used by the daemon and by tests with fakes. */
 export function buildFren({ config, store, signer, fetchFn = fetch }: BuildOptions): Fren {
   const isTestnet = config.network === "testnet";
+  const hyperliquid = new HyperliquidVenue({ fetchFn, apiUrl: hyperliquidApiUrl(config), isTestnet, store, signer });
   return new Fren({
     store,
     signer,
     isTestnet,
     notifier: new TelegramNotifier(store, fetchFn, config.telegram),
-    hyperliquid: new HyperliquidVenue({ fetchFn, apiUrl: hyperliquidApiUrl(config), isTestnet, store, signer }),
+    hyperliquid,
     jupiter: new JupiterVenue({
       fetchFn,
       apiUrl: config.jupiterApiUrl,
@@ -46,6 +50,22 @@ export function buildFren({ config, store, signer, fetchFn = fetch }: BuildOptio
       store,
       signer,
       rpcUrls: config.evmRpcUrls,
+    }),
+    derive: new DeriveVenue({
+      fetchFn,
+      apiUrl: deriveApiUrl(config),
+      isTestnet,
+      store,
+      signer,
+      spotPrice: async (asset) => (await hyperliquid.markets.get(asset))?.midPx ?? null,
+    }),
+    // Polymarket has no testnet: quotes and paper bets use its real markets, and
+    // live bets only run on mainnet.
+    polymarket: new PolymarketVenue({
+      store,
+      data: new SdkPolymarketData(),
+      trader: signer && !isTestnet ? new SdkPolymarketTrader(signer) : null,
+      geoblocked: polymarketGeoblock(fetchFn),
     }),
   });
 }

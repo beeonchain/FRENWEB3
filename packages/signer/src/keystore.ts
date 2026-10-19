@@ -3,6 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { dirname } from "node:path";
 import { Keypair } from "@solana/web3.js";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
+import { deriveSessionKeyOf } from "./derive.js";
 
 /**
  * Every key Fren holds. Lives only inside the signer process; the engine and
@@ -21,6 +22,8 @@ export interface Addresses {
   solana: string;
   evm: `0x${string}`;
   hlAgent: `0x${string}`;
+  /** Derive session key (option trading only). Missing from keystores written before options. */
+  deriveSession?: `0x${string}`;
 }
 
 interface KeystoreFile {
@@ -46,6 +49,7 @@ export function addressesOf(keys: KeyMaterial): Addresses {
     solana: Keypair.fromSecretKey(Buffer.from(keys.solanaSecret, "base64")).publicKey.toBase58(),
     evm: privateKeyToAccount(keys.evmMaster).address,
     hlAgent: privateKeyToAccount(keys.hlAgent).address,
+    deriveSession: privateKeyToAccount(deriveSessionKeyOf(keys.evmMaster)).address,
   };
 }
 
