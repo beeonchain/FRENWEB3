@@ -14,6 +14,7 @@ import { describe, expect, it } from "vitest";
 import { addressesOf, generateKeys, readKeystore, readKeystoreAddresses, writeKeystore } from "./keystore.js";
 import { SOLANA_PROGRAMS, associatedTokenAddress, checkSolanaTransaction } from "./rules.js";
 import { createSigner } from "./signer.js";
+import { checkEvmTransaction } from "./evm.js";
 
 const PASS = "correct horse battery staple";
 
@@ -151,5 +152,53 @@ describe("signer process", () => {
     } finally {
       proc.close();
     }
+  });
+});
+
+describe("snipe and pump.fun rules", () => {
+  const owner = Keypair.generate().publicKey;
+  const jito = new PublicKey("96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU5");
+  const tip = (lamports: number) => SystemProgram.transfer({ fromPubkey: owner, toPubkey: jito, lamports });
+
+  it("allows one capped Jito tip only when the engine flags a snipe", () => {
+    const tx = txFor(owner, [tip(1_000_000)]);
+    expect(() => checkSolanaTransaction(tx, owner)).toThrow(/over the 0 lamport cap/);
+    expect(checkSolanaTransaction(tx, owner, { jitoTipLamports: 1_000_000 }).jitoTipLamports).toBe(1_000_000);
+    expect(() => checkSolanaTransaction(txFor(owner, [tip(1_000_000), tip(1_000_000)]), owner, { jitoTipLamports: 1_500_000 })).toThrow(/cap/);
+    // The engine can't raise the cap past the signer's own 0.01 SOL.
+    expect(() => checkSolanaTransaction(txFor(owner, [tip(20_000_000)]), owner, { jitoTipLamports: 50_000_000 })).toThrow(/10000000 lamport cap/);
+  });
+
+  it("still refuses SOL transfers to anyone who isn't Jito or the wallet", () => {
+    const stranger = SystemProgram.transfer({ fromPubkey: owner, toPubkey: Keypair.generate().publicKey, lamports: 1 });
+    expect(() => checkSolanaTransaction(txFor(owner, [stranger]), owner, { jitoTipLamports: 1_000_000 })).toThrow(/not to the wallet's own account/);
+  });
+
+  it("allows pump.fun curve and PumpSwap programs at the top level", () => {
+    for (const program of [SOLANA_PROGRAMS.pumpFun, SOLANA_PROGRAMS.pumpAmm]) {
+      const ix = new TransactionInstruction({ programId: new PublicKey(program), keys: [{ pubkey: owner, isSigner: true, isWritable: true }], data: Buffer.from([1]) });
+      expect(checkSolanaTransaction(txFor(owner, [ix]), owner).programs).toContain(program);
+    }
+  });
+});
+
+describe("EVM rules", () => {
+  const ROUTER = "0xb92fe925dc43a0ecde6c8b1a2709c170ec4fff4f";
+  const PROXY = "0xccc88a9d1b4ed6b0eaba998850414b24f1c315be";
+  const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+  const approve = (spender: string, amount: bigint) =>
+    `0x095ea7b3${spender.slice(2).padStart(64, "0")}${amount.toString(16).padStart(64, "0")}` as `0x${string}`;
+
+  it("sends only to Relay's contracts, never with ETH, on known chains", () => {
+    expect(checkEvmTransaction({ chainId: 8453, to: ROUTER, data: "0x1234" }).kind).toBe("relay");
+    expect(() => checkEvmTransaction({ chainId: 8453, to: "0x9999999999999999999999999999999999999999", data: "0x1234" })).toThrow(/not on the signer's allow list/);
+    expect(() => checkEvmTransaction({ chainId: 8453, to: ROUTER, data: "0x1234", value: "1" })).toThrow(/never send ETH/);
+    expect(() => checkEvmTransaction({ chainId: 1, to: ROUTER, data: "0x1234" })).toThrow(/not one the signer sends on/);
+  });
+
+  it("approves only Relay spenders, and never for an unlimited amount", () => {
+    expect(checkEvmTransaction({ chainId: 8453, to: USDC, data: approve(PROXY, 50_000_000n) }).kind).toBe("approve");
+    expect(() => checkEvmTransaction({ chainId: 8453, to: USDC, data: approve("0x9999999999999999999999999999999999999999", 1n) })).toThrow(/not on the signer's allow list/);
+    expect(() => checkEvmTransaction({ chainId: 8453, to: USDC, data: approve(PROXY, 2n ** 256n - 1n) })).toThrow(/Unlimited/);
   });
 });

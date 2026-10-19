@@ -3,6 +3,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { signL1Action, signUserSignedAction, type Signature } from "@nktkas/hyperliquid/signing";
 import { ApproveAgentTypes } from "@nktkas/hyperliquid/api/exchange";
 import { depositToHyperliquid } from "./arbitrum.js";
+import { sendEvmTransaction, type EvmTxRequest } from "./evm.js";
 import { addressesOf, type Addresses, type KeyMaterial } from "./keystore.js";
 import { SignerRuleError, checkHyperliquidAction, checkSolanaTransaction, type SolanaTxReport } from "./rules.js";
 
@@ -25,6 +26,8 @@ export interface SolSignRequest {
   txBase64: string;
   /** Upper bound on SOL (in lamports) the wallet may lose in this transaction, fees included. */
   maxSolSpendLamports: number;
+  /** Launch snipes only: allow a Jito tip up to this many lamports (the signer caps it at 0.01 SOL). */
+  jitoTipLamports?: number;
 }
 
 export interface SolSignResult {
@@ -40,6 +43,8 @@ export interface SignerApi {
   solSignTransaction(req: SolSignRequest): Promise<SolSignResult>;
   /** Move USDC from the wallet's own Arbitrum address into its own Hyperliquid account. */
   hlDepositFromArbitrum(req: { amountUsd: number; isTestnet: boolean }): Promise<{ txHash: `0x${string}` }>;
+  /** Send an EVM transaction to an allow-listed contract (Relay swaps and their approvals). Never carries ETH. */
+  evmSendTransaction(req: EvmTxRequest): Promise<{ txHash: `0x${string}` }>;
 }
 
 export interface SignerOptions {
@@ -47,6 +52,8 @@ export interface SignerOptions {
   solanaRpcUrl?: string;
   /** Arbitrum RPC for Hyperliquid deposits. Defaults to the public endpoint. */
   arbitrumRpcUrl?: string;
+  /** RPC per EVM chain id, overriding the public defaults. */
+  evmRpcUrls?: Record<number, string>;
 }
 
 export const HL_AGENT_NAME = "fren";
@@ -91,7 +98,9 @@ export function createSigner(keys: KeyMaterial, options: SignerOptions = {}): Si
 
     async solSignTransaction(req) {
       const tx = VersionedTransaction.deserialize(Buffer.from(req.txBase64, "base64"));
-      const report: SolSignResult["report"] = checkSolanaTransaction(tx, sol.publicKey);
+      const report: SolSignResult["report"] = checkSolanaTransaction(tx, sol.publicKey, {
+        ...(req.jitoTipLamports !== undefined ? { jitoTipLamports: req.jitoTipLamports } : {}),
+      });
 
       if (connection) {
         const before = await connection.getBalance(sol.publicKey, "confirmed");
@@ -120,6 +129,10 @@ export function createSigner(keys: KeyMaterial, options: SignerOptions = {}): Si
 
     async hlDepositFromArbitrum({ amountUsd, isTestnet }) {
       return { txHash: await depositToHyperliquid(master, amountUsd, isTestnet, options.arbitrumRpcUrl) };
+    },
+
+    async evmSendTransaction(req) {
+      return { txHash: await sendEvmTransaction(master, req, options.evmRpcUrls) };
     },
   };
 }

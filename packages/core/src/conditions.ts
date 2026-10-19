@@ -7,6 +7,12 @@ export interface MarketSnapshot {
   prices: Map<string, number>;
   /** key: `hyperliquid:${market}`, hourly funding in percent */
   funding: Map<string, number>;
+  /** keys from tradableKey(): tokens a venue can quote right now. */
+  tradable?: Set<string>;
+}
+
+export function tradableKey(venue: string, chain: string, token: string): string {
+  return `${venue}:${chain}:${token.toLowerCase()}`;
 }
 
 export interface ConditionStatus {
@@ -42,6 +48,11 @@ export function evaluateCondition(c: Condition, snap: MarketSnapshot): Condition
     case "funding": {
       const v = snap.funding.get(snapshotKey(c.venue, c.market));
       return { condition: c, current: v ?? null, met: v !== undefined && compare(v, c.op, c.value) };
+    }
+    case "tradable": {
+      const known = snap.tradable !== undefined;
+      const live = snap.tradable?.has(tradableKey(c.venue, c.chain, c.token)) ?? false;
+      return { condition: c, current: known ? (live ? "trading" : "not trading yet") : null, met: live };
     }
     case "time": {
       const at = new Date(c.after);

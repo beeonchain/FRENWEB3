@@ -41,20 +41,42 @@ export const SOLANA_PROGRAMS = {
   token2022: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
   associatedToken: "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
   jupiterV6: "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",
+  /** pump.fun bonding curves, for coins that haven't graduated yet. */
+  pumpFun: "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P",
+  /** PumpSwap, where pump.fun coins graduate to. */
+  pumpAmm: "pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA",
 } as const;
 
 const NATIVE_MINT = new PublicKey("So11111111111111111111111111111111111111112");
+
+/** Jito's published tip accounts. A snipe may tip one of these, up to the cap. */
+export const JITO_TIP_ACCOUNTS = new Set([
+  "96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU5",
+  "HFqU5x63VTqvQss8hp11i4wVV8bD44PvwucfZ2bU7gRe",
+  "Cw8CFyM9FkoMi7K7Crf6HNQqf4uEMzpKw6QNghXLvLkY",
+  "ADaUMid9yfUytqMBgopwjb2DTLSokTSzL1zt6iGPaS49",
+  "DfXygSm4jCyNCybVYYK6DwvWqjKee8pbDmJGcLWNDXjh",
+  "ADuUkR4vqLUMWXxW9gh6D6L8pMSawimctcNZ5pGwDcEt",
+  "DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL",
+  "3AVi9Tg9Uo68tJfuvoKvqKNWKkC5wPdSSdeBnizKZ6jT",
+]);
+
+/** Most a single transaction may tip Jito: 0.01 SOL. */
+export const MAX_JITO_TIP_LAMPORTS = 10_000_000;
 
 export interface SolanaTxRules {
   /** Programs allowed as top-level instructions, beyond the always-allowed plumbing. */
   extraPrograms?: string[];
   /** Cap on the priority fee the transaction may pay, in lamports. */
   maxPriorityFeeLamports?: number;
+  /** Allow one tip to a Jito tip account of at most this many lamports (never above MAX_JITO_TIP_LAMPORTS). */
+  jitoTipLamports?: number;
 }
 
 export interface SolanaTxReport {
   programs: string[];
   priorityFeeLamports: number;
+  jitoTipLamports: number;
 }
 
 export function associatedTokenAddress(owner: PublicKey, mint: PublicKey, tokenProgram: string): PublicKey {
@@ -69,7 +91,8 @@ export function associatedTokenAddress(owner: PublicKey, mint: PublicKey, tokenP
  *
  * - The wallet must be the fee payer.
  * - Only allow-listed programs may be invoked at the top level.
- * - Top-level SOL transfers may only go to the wallet's own wrapped-SOL account.
+ * - Top-level SOL transfers may only go to the wallet's own wrapped-SOL account,
+ *   or (for a snipe the engine flagged) one capped tip to a Jito tip account.
  * - Top-level token instructions are limited to SyncNative and closing an
  *   account back to the wallet; approvals, authority changes and transfers are refused.
  * - The priority fee is capped.
@@ -95,6 +118,8 @@ export function checkSolanaTransaction(tx: VersionedTransaction, owner: PublicKe
     return k.toBase58();
   };
 
+  const tipCap = Math.min(rules.jitoTipLamports ?? 0, MAX_JITO_TIP_LAMPORTS);
+  let tipped = 0;
   let cuLimit = 200_000;
   let cuPriceMicroLamports = 0n;
   const programs: string[] = [];
@@ -109,6 +134,14 @@ export function checkSolanaTransaction(tx: VersionedTransaction, owner: PublicKe
       const kind = data.readUInt32LE(0);
       if (kind !== 2) throw new SignerRuleError(`System instruction ${kind} is not allowed.`);
       const dest = keyAt(ix.accountKeyIndexes[1] ?? -1);
+      if (JITO_TIP_ACCOUNTS.has(dest)) {
+        const lamports = Number(data.readBigUInt64LE(4));
+        if (tipped + lamports > tipCap) {
+          throw new SignerRuleError(`Jito tip of ${tipped + lamports} lamports is over the ${tipCap} lamport cap for this transaction.`);
+        }
+        tipped += lamports;
+        continue;
+      }
       if (dest !== ownerB58 && !wsolAccounts.has(dest)) {
         throw new SignerRuleError(`SOL transfer to ${dest} is not to the wallet's own account.`);
       }
@@ -139,7 +172,7 @@ export function checkSolanaTransaction(tx: VersionedTransaction, owner: PublicKe
   if (priorityFeeLamports > cap) {
     throw new SignerRuleError(`Priority fee of ${priorityFeeLamports} lamports is over the ${cap} lamport cap.`);
   }
-  return { programs, priorityFeeLamports };
+  return { programs, priorityFeeLamports, jitoTipLamports: tipped };
 }
 
 export class SignerRuleError extends Error {

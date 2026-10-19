@@ -8,8 +8,18 @@ import { z } from "zod";
 
 export const PLAN_VERSION = 1 as const;
 
-export const Venue = z.enum(["hyperliquid", "jupiter"]);
+export const Venue = z.enum(["hyperliquid", "jupiter", "relay"]);
 export type Venue = z.infer<typeof Venue>;
+
+/** Chains a token can live on. Solana tokens trade through Jupiter, EVM tokens through Relay. */
+export const Chain = z.enum(["solana", "base", "robinhood", "arbitrum"]);
+export type Chain = z.infer<typeof Chain>;
+export const EVM_CHAINS = ["base", "robinhood", "arbitrum"] as const satisfies readonly Chain[];
+export type EvmChain = (typeof EVM_CHAINS)[number];
+
+/** Spot venues: Jupiter for Solana, Relay for EVM chains. */
+export const SpotVenue = z.enum(["jupiter", "relay"]);
+export type SpotVenue = z.infer<typeof SpotVenue>;
 
 export const Side = z.enum(["long", "short"]);
 export type Side = z.infer<typeof Side>;
@@ -67,10 +77,12 @@ export type SwapAmount = z.infer<typeof SwapAmount>;
 
 export const SwapLeg = z.object({
   kind: z.literal("swap"),
-  venue: z.literal("jupiter"),
+  venue: SpotVenue.describe('"jupiter" for Solana tokens (pump.fun included), "relay" for tokens on Base, Robinhood Chain or Arbitrum.'),
+  /** Where the token lives. Jupiter is always Solana; Relay needs an EVM chain. */
+  chain: Chain.default("solana").describe('Chain the token lives on. "solana" with jupiter; "base", "robinhood" or "arbitrum" with relay.'),
   side: z.enum(["buy", "sell"]),
-  /** Token mint address (preferred) or a well-known symbol such as "SOL" or "JUP". */
-  token: z.string().min(1).describe("Token mint (contract address) or a ticker. Tickers only resolve to verified tokens."),
+  /** Token mint or contract address (preferred) or a well-known symbol such as "SOL" or "JUP". */
+  token: z.string().min(1).describe("Token mint / contract address (CA) or a ticker. Tickers only resolve to verified tokens."),
   amount: SwapAmount.describe('Buys: {type:"usd"} spends that much USDC. Sells: {type:"fraction"} of the balance, or {type:"usd"} worth.'),
   maxSlippageBps: z.number().int().min(1).max(5000).default(100),
 });
@@ -99,6 +111,16 @@ export const Condition = z.discriminatedUnion("type", [
     op: Comparator,
     value: z.number().describe("Hourly funding in percent: 0.02 means 0.02%/h."),
   }),
+  /**
+   * Fires once the token can actually be bought: the launch snipe. Checked
+   * every couple of seconds, not every watcher tick.
+   */
+  z.object({
+    type: z.literal("tradable"),
+    venue: SpotVenue,
+    chain: Chain.default("solana"),
+    token: z.string().min(1).describe("Contract address that isn't trading yet."),
+  }),
   /** Fire at or after a point in time. */
   z.object({
     type: z.literal("time"),
@@ -121,6 +143,22 @@ export const Plan = z.object({
   /** The user's request, quoted, so the echo and logs show what was asked. */
   request: z.string().max(2000).describe("The user's message, quoted verbatim."),
   steps: z.array(PlanStep).min(1).max(10),
+}).superRefine((plan, ctx) => {
+  plan.steps.forEach((step, i) => {
+    const pairs: { venue: SpotVenue; chain: Chain; path: (string | number)[] }[] = [];
+    if (step.leg.kind === "swap") pairs.push({ venue: step.leg.venue, chain: step.leg.chain, path: ["steps", i, "leg", "chain"] });
+    step.when.forEach((c, j) => {
+      if (c.type === "tradable") pairs.push({ venue: c.venue, chain: c.chain, path: ["steps", i, "when", j, "chain"] });
+    });
+    for (const p of pairs) {
+      if (p.venue === "jupiter" && p.chain !== "solana") {
+        ctx.addIssue({ code: "custom", path: p.path, message: `jupiter only trades Solana tokens; use venue "relay" for ${p.chain}` });
+      }
+      if (p.venue === "relay" && p.chain === "solana") {
+        ctx.addIssue({ code: "custom", path: p.path, message: 'relay needs an EVM chain: "base", "robinhood" or "arbitrum"' });
+      }
+    }
+  });
 });
 export type Plan = z.infer<typeof Plan>;
 export type PlanInput = z.input<typeof Plan>;

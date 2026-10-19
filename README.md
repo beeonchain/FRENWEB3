@@ -2,7 +2,7 @@
 
 A self-hosted [OpenClaw](https://github.com/openclaw/openclaw) agent that trades on-chain from a chat window. Tell it in Telegram, "long gold 20x with $500, stop at -30%," and it finds the market, checks your limits, signs with keys that never leave your machine, and replies once with what it did.
 
-Status: **early backend**. It does Hyperliquid perps (crypto, gold, stocks, indices), Solana spot through Jupiter, conditional orders, stops and targets, paper mode, and a kill switch. Options, Polymarket, launch sniping, cross-chain and yield come next (see [docs/ROADMAP.md](docs/ROADMAP.md)).
+Status: **early backend**. It does Hyperliquid perps (crypto, gold, stocks, indices), Solana spot through Jupiter, pump.fun coins (on the curve and after), launch snipes, tokens on Base and Robinhood Chain through Relay, conditional orders, stops and targets, paper mode, and a kill switch. Options, Polymarket and yield come next (see [docs/ROADMAP.md](docs/ROADMAP.md)).
 
 ## How it works
 
@@ -14,8 +14,8 @@ OpenClaw agent ── fren plugin (tools + /ok /stop /limits /resume)
       ▼
 fren engine (local HTTP API on 127.0.0.1)
   ├─ policy: your caps, leverage, venues, daily spend. No LLM.
-  ├─ venues: Hyperliquid, Jupiter (paper or live)
-  ├─ watcher: checks conditions every 15s and fires plans. No LLM.
+  ├─ venues: Hyperliquid, Jupiter + pump.fun, Relay (paper or live)
+  ├─ watcher: checks conditions every 15s (launch snipes every 2s). No LLM.
   └─ signer (separate process): holds the keys, refuses withdrawals,
      transfers to strangers and unknown programs
 ```
@@ -47,11 +47,15 @@ node packages/engine/dist/cli.js start
 openclaw plugins install --link --accept-capabilities ./packages/openclaw-plugin
 ```
 
+For snipes, get a free Jupiter API key at portal.jup.ag and put it in `~/.fren/config.json` as `jupiterApiKey`; without one Jupiter allows about one request every two seconds.
+
 Then talk to your OpenClaw bot:
 
-- "what's my wallet" shows where to send USDC (Solana for spot, Arbitrum or Hyperliquid for perps).
+- "what's my wallet" shows where to send USDC (Solana for Solana coins, Arbitrum or Base for perps and EVM tokens).
 - "long BTC 10x with $50, stop at -20%"
 - "buy $25 of JUP"
+- "buy $50 of <pump.fun CA>"
+- "snipe <CA> on Base with $100 the second it launches"
 - "short SOL $100 at 5x when funding goes above 0.02%/h"
 - "stop everything"
 

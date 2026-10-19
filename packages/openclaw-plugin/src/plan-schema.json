@@ -168,7 +168,22 @@
                   },
                   "venue": {
                     "type": "string",
-                    "const": "jupiter"
+                    "enum": [
+                      "jupiter",
+                      "relay"
+                    ],
+                    "description": "\"jupiter\" for Solana tokens (pump.fun included), \"relay\" for tokens on Base, Robinhood Chain or Arbitrum."
+                  },
+                  "chain": {
+                    "default": "solana",
+                    "description": "Chain the token lives on. \"solana\" with jupiter; \"base\", \"robinhood\" or \"arbitrum\" with relay.",
+                    "type": "string",
+                    "enum": [
+                      "solana",
+                      "base",
+                      "robinhood",
+                      "arbitrum"
+                    ]
                   },
                   "side": {
                     "type": "string",
@@ -180,7 +195,7 @@
                   "token": {
                     "type": "string",
                     "minLength": 1,
-                    "description": "Token mint (contract address) or a ticker. Tickers only resolve to verified tokens."
+                    "description": "Token mint / contract address (CA) or a ticker. Tickers only resolve to verified tokens."
                   },
                   "amount": {
                     "oneOf": [
@@ -257,7 +272,8 @@
                       "type": "string",
                       "enum": [
                         "hyperliquid",
-                        "jupiter"
+                        "jupiter",
+                        "relay"
                       ]
                     },
                     "market": {
@@ -321,6 +337,42 @@
                     "market",
                     "op",
                     "value"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "tradable"
+                    },
+                    "venue": {
+                      "type": "string",
+                      "enum": [
+                        "jupiter",
+                        "relay"
+                      ]
+                    },
+                    "chain": {
+                      "default": "solana",
+                      "type": "string",
+                      "enum": [
+                        "solana",
+                        "base",
+                        "robinhood",
+                        "arbitrum"
+                      ]
+                    },
+                    "token": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Contract address that isn't trading yet."
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "venue",
+                    "token"
                   ]
                 },
                 {

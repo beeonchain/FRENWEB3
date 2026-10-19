@@ -27,7 +27,14 @@ function pctMove(p: number): string {
   return `${p >= 1 ? p.toFixed(1) : p.toPrecision(2)}%`;
 }
 
-const venueName: Record<string, string> = { hyperliquid: "Hyperliquid", jupiter: "Jupiter" };
+const venueName: Record<string, string> = { hyperliquid: "Hyperliquid", jupiter: "Jupiter", relay: "Relay" };
+
+export const chainName: Record<string, string> = { solana: "Solana", base: "Base", robinhood: "Robinhood Chain", arbitrum: "Arbitrum" };
+
+/** "0x1234…abcd" for long addresses, unchanged for symbols. */
+export function shortToken(t: string): string {
+  return t.length > 20 ? `${t.slice(0, 6)}…${t.slice(-4)}` : t;
+}
 
 export function describeLeg(leg: Leg, resolved?: Pick<ResolvedStep, "symbol" | "notionalUsd">): string {
   const where = venueName[leg.venue] ?? leg.venue;
@@ -53,7 +60,8 @@ export function describeLeg(leg: Leg, resolved?: Pick<ResolvedStep, "symbol" | "
       return `${share} your ${resolved?.symbol ?? leg.market} position on ${where}`;
     }
     case "swap": {
-      const token = resolved?.symbol ?? leg.token;
+      const token = shortToken(resolved?.symbol ?? leg.token);
+      const where = leg.venue === "relay" ? chainName[leg.chain] ?? leg.chain : venueName[leg.venue];
       if (leg.side === "buy") {
         const amt = leg.amount.type === "usd" ? usd(leg.amount.usd) : `${Math.round(leg.amount.fraction * 100)}% of your USDC`;
         return `Buy ${amt} of ${token} on ${where}`;
@@ -70,6 +78,8 @@ export function describeCondition(c: Condition): string {
       return `${c.market} price ${c.op} ${price(c.value)}`;
     case "funding":
       return `${c.market} funding ${c.op} ${c.value}%/h`;
+    case "tradable":
+      return `${shortToken(c.token)} starts trading${c.chain === "solana" ? "" : ` on ${chainName[c.chain] ?? c.chain}`}`;
     case "time":
       return `after ${new Date(c.after).toUTCString()}`;
   }
@@ -82,6 +92,7 @@ export function describeConditionStatus(s: ConditionStatus): string {
   if (s.current === null) now = " (no data yet)";
   else if (c.type === "price") now = ` (now ${price(Number(s.current))})`;
   else if (c.type === "funding") now = ` (now ${Number(s.current).toFixed(4)}%/h)`;
+  else if (c.type === "tradable") now = ` (${s.current})`;
   return `${mark} ${describeCondition(c)}${now}`;
 }
 

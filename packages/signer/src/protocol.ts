@@ -13,4 +13,4 @@ export type SignerResponse =
   | { id: number; result: unknown }
   | { id: number; error: { message: string; rule: boolean } };
 
-export const SIGNER_METHODS: readonly SignerMethod[] = ["addresses", "hlSignL1", "hlApproveAgent", "solSignTransaction", "hlDepositFromArbitrum"];
+export const SIGNER_METHODS: readonly SignerMethod[] = ["addresses", "hlSignL1", "hlApproveAgent", "solSignTransaction", "hlDepositFromArbitrum", "evmSendTransaction"];

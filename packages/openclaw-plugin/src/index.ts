@@ -59,7 +59,7 @@ export function toolSpecs(client: EngineClient): ToolSpec[] {
       name: "fren_markets",
       label: "Find a market",
       description:
-        "Search Hyperliquid perps (crypto, gold, stocks, indices) and Solana tokens. Call this before fren_trade whenever you are not sure of the exact symbol or mint.",
+        "Search Hyperliquid perps (crypto, gold, stocks, indices), Solana tokens (pump.fun included) and tokens on Base, Robinhood Chain and Arbitrum. Call this before fren_trade whenever you are not sure of the exact symbol, mint or contract address.",
       parameters: Type.Object({ query: Type.String({ description: 'What the user called it: "gold", "nasdaq", "BTC", "bonk", or a contract address.' }) }),
       run: async (p) => (await client.call<{ text: string }>("GET", `/markets?q=${encodeURIComponent(String(p.query))}`)).text,
     },
@@ -70,6 +70,7 @@ export function toolSpecs(client: EngineClient): ToolSpec[] {
         "Propose a trading plan built from the user's request. Fren checks it against the user's limits, then either executes it,",
         "asks the user for a confirmation code, or refuses with reasons. Relay the returned text to the user as-is.",
         "One plan can hold several legs; legs with `when` conditions wait for the watcher.",
+        'To snipe a launch, add when: [{type:"tradable", venue, chain, token}] with the same contract address.',
         "Never invent token addresses: use one the user gave or one fren_markets returned.",
       ].join(" "),
       parameters: Type.Object({ plan: Type.Unsafe<Record<string, unknown>>(planSchema) }),

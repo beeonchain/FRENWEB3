@@ -4,12 +4,15 @@ import { fileURLToPath } from "node:url";
 import type { Addresses } from "./keystore.js";
 import type { SignerMethod, SignerResponse } from "./protocol.js";
 import type { HlApproveAgentResult, HlSignRequest, Signature, SignerApi, SolSignRequest, SolSignResult } from "./signer.js";
+import type { EvmTxRequest } from "./evm.js";
 
 export interface SignerProcessOptions {
   keystorePath: string;
   passphraseFile?: string;
   solanaRpcUrl?: string;
   arbitrumRpcUrl?: string;
+  /** RPC per EVM chain id. */
+  evmRpcUrls?: Record<number, string>;
   /** Run the signer as another OS user, e.g. ["sudo", "-u", "fren-signer"]. */
   commandPrefix?: string[];
 }
@@ -41,6 +44,7 @@ export class SignerProcess implements SignerApi {
       ...(process.env.FREN_PASSPHRASE ? { FREN_PASSPHRASE: process.env.FREN_PASSPHRASE } : {}),
       ...(opts.solanaRpcUrl ? { FREN_SOLANA_RPC: opts.solanaRpcUrl } : {}),
       ...(opts.arbitrumRpcUrl ? { FREN_ARBITRUM_RPC: opts.arbitrumRpcUrl } : {}),
+      ...(opts.evmRpcUrls ? { FREN_EVM_RPCS: JSON.stringify(opts.evmRpcUrls) } : {}),
     };
     this.child = spawn(cmd!, prefixArgs, { env, stdio: ["pipe", "pipe", "pipe"] });
 
@@ -96,6 +100,10 @@ export class SignerProcess implements SignerApi {
   }
   hlDepositFromArbitrum(req: { amountUsd: number; isTestnet: boolean }) {
     return this.call<{ txHash: `0x${string}` }>("hlDepositFromArbitrum", req);
+  }
+
+  evmSendTransaction(req: EvmTxRequest) {
+    return this.call<{ txHash: `0x${string}` }>("evmSendTransaction", req);
   }
 
   close() {

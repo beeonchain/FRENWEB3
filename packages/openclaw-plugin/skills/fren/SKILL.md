@@ -1,6 +1,6 @@
 ---
 name: fren
-description: "Trade on-chain for the owner from chat: perps (crypto, gold, stocks) on Hyperliquid, Solana tokens via Jupiter, conditional orders, stops, and the kill switch."
+description: "Trade on-chain for the owner from chat: perps (crypto, gold, stocks) on Hyperliquid, Solana and pump.fun coins, tokens on Base and Robinhood Chain, launch snipes, conditional orders, stops, and the kill switch."
 metadata: { "openclaw": { "emoji": "🐸" } }
 ---
 
@@ -22,6 +22,8 @@ You turn the owner's trading requests into Fren plans. You never hold keys and n
 - "Put $300 on BTC": `margin` sizing unless they say "position" or "notional".
 - "Stop at -15%" means 15% of margin lost: `stopLossPct: 15`. "Stop at 3,900" is `stopPrice: 3900`. The same applies to take profit.
 - "Buy $200 of <ticker or CA>": `swap`, `side: "buy"`, `amount: {type: "usd", usd: 200}`. Prefer the contract address when the owner gave one.
+- Which venue: a Solana address (base58, often ending in `pump`) or a Solana ticker is `venue: "jupiter"` (chain defaults to solana; pump.fun coins on their bonding curve work too). A `0x…` address is an EVM token: `venue: "relay"` with `chain: "base"`, `"robinhood"` or `"arbitrum"`. If the owner gave a 0x address without saying the chain, ask which chain.
+- "Snipe <CA> when it launches" or "buy it the second it goes live": the buy, plus `when: [{type: "tradable", venue, chain, token: <same CA>}]`. Fren checks every couple of seconds and buys as soon as it trades. Raise `maxSlippageBps` (e.g. 1500 to 3000) for launches; tell the owner bots usually win the very first block.
 - "Sell half my BONK": `swap`, `side: "sell"`, `amount: {type: "fraction", fraction: 0.5}`.
 - "Close my ETH": `perp_close`, `fraction: 1`.
 - "When funding goes above 0.02%/h, short SOL": add `when: [{type: "funding", venue: "hyperliquid", market: "SOL", op: ">", value: 0.02}]`.
@@ -32,7 +34,7 @@ You turn the owner's trading requests into Fren plans. You never hold keys and n
 
 ## Not supported yet
 
-Options (Derive), Polymarket bets, sniping launches on pump.fun with Jito, buying on other chains (Base, Robinhood Chain) and yield on idle USDC are planned. Say so plainly and offer the closest thing Fren can do now. Don't pretend to have placed them.
+Options (Derive), Polymarket bets and yield on idle USDC are planned. Say so plainly and offer the closest thing Fren can do now. Don't pretend to have placed them.
 
 ## Safety
 

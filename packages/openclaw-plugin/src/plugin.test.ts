@@ -2,8 +2,8 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createApi, Fren, MemoryNotifier, Store, HyperliquidVenue, JupiterVenue } from "@fren/engine";
-import { FakeVenues } from "../../engine/src/testing.js";
+import { createApi } from "@fren/engine";
+import { buildTestFren } from "../../engine/src/testing.js";
 import plugin, { TOOL_NAMES } from "./index.js";
 
 type Registered = { tools: Map<string, (ctx: Record<string, unknown>) => any>; commands: Map<string, any> };
@@ -24,17 +24,8 @@ describe("OpenClaw plugin against a real engine", () => {
   const dir = mkdtempSync(join(tmpdir(), "fren-plugin-"));
   const tokenFile = join(dir, "api-token");
   writeFileSync(tokenFile, "plugin-test-token");
-  const fake = new FakeVenues();
-  const store = new Store(":memory:");
-  const notifier = new MemoryNotifier(store, false); // no private line: codes must go out via delivery.send
-  const fren = new Fren({
-    store,
-    notifier,
-    signer: null,
-    isTestnet: true,
-    hyperliquid: new HyperliquidVenue({ fetchFn: fake.fetch, apiUrl: "https://hl.test", isTestnet: true, store, signer: null }),
-    jupiter: new JupiterVenue({ fetchFn: fake.fetch, apiUrl: "https://jup.test", solanaRpcUrl: "https://rpc.test", store, signer: null }),
-  });
+  // No private line: codes must go out via delivery.send.
+  const { fren } = buildTestFren({ privateLine: false });
   const server = createApi(fren, "plugin-test-token");
   let reg: Registered;
 
