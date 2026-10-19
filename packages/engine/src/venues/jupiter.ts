@@ -451,7 +451,8 @@ export class JupiterVenue implements SpotVenueAdapter {
 
   async positions(mode: "paper" | "live"): Promise<PositionView[]> {
     if (mode === "paper") {
-      const holdings = this.o.store.paperHoldings();
+      // Other venues keep paper holdings under prefixed keys ("evm:base:0x…"); Solana mints never contain a colon.
+      const holdings = this.o.store.paperHoldings().filter((h) => !h.mint.includes(":"));
       const px = await this.prices(holdings.map((h) => h.mint)).catch(() => new Map<string, number>());
       return holdings.map((h) => {
         const mark = px.get(h.mint) ?? null;
