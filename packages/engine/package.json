@@ -1,5 +1,5 @@
 {
-  "name": "@jarvis/engine",
+  "name": "@fren/engine",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -12,11 +12,11 @@
     }
   },
   "bin": {
-    "jarvis": "./dist/cli.js"
+    "fren": "./dist/cli.js"
   },
   "dependencies": {
-    "@jarvis/core": "0.1.0",
-    "@jarvis/signer": "0.1.0",
+    "@fren/core": "0.1.0",
+    "@fren/signer": "0.1.0",
     "@nktkas/hyperliquid": "^0.33.3",
     "@solana/web3.js": "^1.98.0",
     "zod": "^4.1.0"

@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 
-export const JarvisConfig = z.object({
+export const FrenConfig = z.object({
   /** "testnet" uses Hyperliquid testnet; Jupiter has no testnet, so use paper mode for spot there. */
   network: z.enum(["mainnet", "testnet"]).default("testnet"),
   solanaRpcUrl: z.string().url().default("https://api.mainnet-beta.solana.com"),
@@ -19,7 +19,7 @@ export const JarvisConfig = z.object({
     .default({ host: "127.0.0.1", port: 7420 }),
   /**
    * Direct line to the owner for confirmation codes and watcher alerts. Uses the
-   * same bot as OpenClaw's Telegram channel; Jarvis only calls sendMessage, so it
+   * same bot as OpenClaw's Telegram channel; Fren only calls sendMessage, so it
    * does not compete with OpenClaw for updates.
    */
   telegram: z.object({ botToken: z.string().min(10), ownerChatId: z.string().min(1) }).optional(),
@@ -27,13 +27,13 @@ export const JarvisConfig = z.object({
   /** Starting paper balance in USDC. */
   paperStartingUsd: z.number().positive().default(10_000),
 });
-export type JarvisConfig = z.infer<typeof JarvisConfig>;
+export type FrenConfig = z.infer<typeof FrenConfig>;
 
-export function jarvisHome(): string {
-  return process.env.JARVIS_HOME ?? join(homedir(), ".jarvis");
+export function frenHome(): string {
+  return process.env.FREN_HOME ?? join(homedir(), ".fren");
 }
 
-export interface JarvisPaths {
+export interface FrenPaths {
   home: string;
   config: string;
   keystore: string;
@@ -42,23 +42,23 @@ export interface JarvisPaths {
   db: string;
 }
 
-export function jarvisPaths(home = jarvisHome()): JarvisPaths {
+export function frenPaths(home = frenHome()): FrenPaths {
   return {
     home,
     config: join(home, "config.json"),
     keystore: join(home, "keystore.json"),
     passphrase: join(home, "signer.pass"),
     apiToken: join(home, "api-token"),
-    db: join(home, "jarvis.sqlite"),
+    db: join(home, "fren.sqlite"),
   };
 }
 
-export function loadConfig(paths: JarvisPaths): JarvisConfig {
+export function loadConfig(paths: FrenPaths): FrenConfig {
   const raw = existsSync(paths.config) ? JSON.parse(readFileSync(paths.config, "utf8")) : {};
-  return JarvisConfig.parse(raw);
+  return FrenConfig.parse(raw);
 }
 
-export function hyperliquidApiUrl(cfg: JarvisConfig): string {
+export function hyperliquidApiUrl(cfg: FrenConfig): string {
   if (cfg.hyperliquidApiUrl) return cfg.hyperliquidApiUrl;
   return cfg.network === "mainnet" ? "https://api.hyperliquid.xyz" : "https://api.hyperliquid-testnet.xyz";
 }

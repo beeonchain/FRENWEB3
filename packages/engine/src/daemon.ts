@@ -1,8 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
-import { SignerProcess, type SignerApi } from "@jarvis/signer";
+import { SignerProcess, type SignerApi } from "@fren/signer";
 import { createApi } from "./api.js";
-import { hyperliquidApiUrl, jarvisPaths, loadConfig, type JarvisConfig, type JarvisPaths } from "./config.js";
-import { Jarvis } from "./engine.js";
+import { hyperliquidApiUrl, frenPaths, loadConfig, type FrenConfig, type FrenPaths } from "./config.js";
+import { Fren } from "./engine.js";
 import type { Fetch } from "./http.js";
 import { TelegramNotifier } from "./notify.js";
 import { Store } from "./store.js";
@@ -10,17 +10,17 @@ import { HyperliquidVenue } from "./venues/hyperliquid.js";
 import { JupiterVenue } from "./venues/jupiter.js";
 
 export interface BuildOptions {
-  config: JarvisConfig;
+  config: FrenConfig;
   store: Store;
   signer: SignerApi | null;
   fetchFn?: Fetch;
 }
 
 /** Wire the engine from its parts. Used by the daemon and by tests with fakes. */
-export function buildJarvis({ config, store, signer, fetchFn = fetch }: BuildOptions): Jarvis {
+export function buildFren({ config, store, signer, fetchFn = fetch }: BuildOptions): Fren {
   const isTestnet = config.network === "testnet";
   const jupiterUrl = config.jupiterApiKey ? "https://api.jup.ag" : config.jupiterApiUrl;
-  return new Jarvis({
+  return new Fren({
     store,
     signer,
     isTestnet,
@@ -37,9 +37,9 @@ export function buildJarvis({ config, store, signer, fetchFn = fetch }: BuildOpt
   });
 }
 
-export async function startDaemon(paths: JarvisPaths = jarvisPaths()) {
+export async function startDaemon(paths: FrenPaths = frenPaths()) {
   const config = loadConfig(paths);
-  if (!existsSync(paths.apiToken)) throw new Error(`No API token at ${paths.apiToken}. Run \`jarvis init\` first.`);
+  if (!existsSync(paths.apiToken)) throw new Error(`No API token at ${paths.apiToken}. Run \`fren init\` first.`);
   const token = readFileSync(paths.apiToken, "utf8").trim();
   const store = new Store(paths.db, config.paperStartingUsd);
 
@@ -49,22 +49,22 @@ export async function startDaemon(paths: JarvisPaths = jarvisPaths()) {
       keystorePath: paths.keystore,
       passphraseFile: paths.passphrase,
       solanaRpcUrl: config.solanaRpcUrl,
-      ...(process.env.JARVIS_SIGNER_PREFIX ? { commandPrefix: process.env.JARVIS_SIGNER_PREFIX.split(" ") } : {}),
+      ...(process.env.FREN_SIGNER_PREFIX ? { commandPrefix: process.env.FREN_SIGNER_PREFIX.split(" ") } : {}),
     });
     await signer.ready;
   }
 
-  const jarvis = buildJarvis({ config, store, signer });
-  const server = createApi(jarvis, token);
+  const fren = buildFren({ config, store, signer });
+  const server = createApi(fren, token);
   await new Promise<void>((res) => server.listen(config.api.port, config.api.host, res));
 
   const timer = setInterval(() => {
-    jarvis.tick().catch((err: Error) => console.error(`watcher: ${err.message}`));
+    fren.tick().catch((err: Error) => console.error(`watcher: ${err.message}`));
   }, config.watcherIntervalMs);
 
-  const limits = jarvis.limits();
+  const limits = fren.limits();
   console.log(
-    `jarvisd listening on http://${config.api.host}:${config.api.port} · ${config.network} · ${limits.mode} mode${limits.paused ? " · stopped" : ""}`,
+    `frend listening on http://${config.api.host}:${config.api.port} · ${config.network} · ${limits.mode} mode${limits.paused ? " · stopped" : ""}`,
   );
 
   const shutdown = () => {
@@ -76,5 +76,5 @@ export async function startDaemon(paths: JarvisPaths = jarvisPaths()) {
   };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
-  return { jarvis, server, stop: shutdown };
+  return { fren, server, stop: shutdown };
 }

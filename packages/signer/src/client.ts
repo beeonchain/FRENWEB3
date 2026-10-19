@@ -10,7 +10,7 @@ export interface SignerProcessOptions {
   passphraseFile?: string;
   solanaRpcUrl?: string;
   arbitrumRpcUrl?: string;
-  /** Run the signer as another OS user, e.g. ["sudo", "-u", "jarvis-signer"]. */
+  /** Run the signer as another OS user, e.g. ["sudo", "-u", "fren-signer"]. */
   commandPrefix?: string[];
 }
 
@@ -36,11 +36,11 @@ export class SignerProcess implements SignerApi {
     const [cmd, ...prefixArgs] = [...(opts.commandPrefix ?? []), process.execPath, server];
     const env: NodeJS.ProcessEnv = {
       PATH: process.env.PATH,
-      JARVIS_KEYSTORE: opts.keystorePath,
-      ...(opts.passphraseFile ? { JARVIS_PASSPHRASE_FILE: opts.passphraseFile } : {}),
-      ...(process.env.JARVIS_PASSPHRASE ? { JARVIS_PASSPHRASE: process.env.JARVIS_PASSPHRASE } : {}),
-      ...(opts.solanaRpcUrl ? { JARVIS_SOLANA_RPC: opts.solanaRpcUrl } : {}),
-      ...(opts.arbitrumRpcUrl ? { JARVIS_ARBITRUM_RPC: opts.arbitrumRpcUrl } : {}),
+      FREN_KEYSTORE: opts.keystorePath,
+      ...(opts.passphraseFile ? { FREN_PASSPHRASE_FILE: opts.passphraseFile } : {}),
+      ...(process.env.FREN_PASSPHRASE ? { FREN_PASSPHRASE: process.env.FREN_PASSPHRASE } : {}),
+      ...(opts.solanaRpcUrl ? { FREN_SOLANA_RPC: opts.solanaRpcUrl } : {}),
+      ...(opts.arbitrumRpcUrl ? { FREN_ARBITRUM_RPC: opts.arbitrumRpcUrl } : {}),
     };
     this.child = spawn(cmd!, prefixArgs, { env, stdio: ["pipe", "pipe", "pipe"] });
 

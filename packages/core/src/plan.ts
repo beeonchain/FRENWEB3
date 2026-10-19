@@ -28,7 +28,7 @@ export const PerpOpenLeg = z.object({
   kind: z.literal("perp_open"),
   venue: z.literal("hyperliquid"),
   /** Venue symbol, e.g. "BTC", or "<dex>:<asset>" for builder-deployed markets like gold. */
-  market: z.string().min(1).describe('Hyperliquid symbol from jarvis_markets, e.g. "BTC" or "xyz:GOLD" for builder-deployed markets.'),
+  market: z.string().min(1).describe('Hyperliquid symbol from fren_markets, e.g. "BTC" or "xyz:GOLD" for builder-deployed markets.'),
   side: Side,
   sizing: PerpSizing.describe('"margin" = collateral the user puts up ("use $2000 as collateral"); "notional" = full position size.'),
   leverage: z.number().int().min(1).max(1000),

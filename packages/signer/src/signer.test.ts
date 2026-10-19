@@ -28,7 +28,7 @@ function txFor(payer: PublicKey, ixs: TransactionInstruction[]) {
 
 describe("keystore", () => {
   it("round-trips, refuses overwrite, and keeps the file private", () => {
-    const dir = mkdtempSync(join(tmpdir(), "jarvis-ks-"));
+    const dir = mkdtempSync(join(tmpdir(), "fren-ks-"));
     const path = join(dir, "keystore.json");
     const keys = generateKeys();
     const addrs = writeKeystore(path, keys, PASS);
@@ -137,7 +137,7 @@ describe("signer process", () => {
   it("runs out of process and answers over stdio", async () => {
     // Uses the built output so the child can be spawned with plain node.
     const { SignerProcess } = await import("../dist/client.js");
-    const dir = mkdtempSync(join(tmpdir(), "jarvis-sp-"));
+    const dir = mkdtempSync(join(tmpdir(), "fren-sp-"));
     const ks = join(dir, "keystore.json");
     const passFile = join(dir, "pass");
     writeFileSync(passFile, PASS, { mode: 0o600 });

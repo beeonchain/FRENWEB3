@@ -15,21 +15,21 @@ import { SignerRuleError } from "./rules.js";
 import { createSigner, type SignerApi } from "./signer.js";
 
 function passphrase(): string {
-  const file = process.env.JARVIS_PASSPHRASE_FILE;
+  const file = process.env.FREN_PASSPHRASE_FILE;
   if (file) return readFileSync(file, "utf8").trim();
-  const env = process.env.JARVIS_PASSPHRASE;
+  const env = process.env.FREN_PASSPHRASE;
   if (env) return env;
-  throw new Error("Set JARVIS_PASSPHRASE_FILE (preferred) or JARVIS_PASSPHRASE.");
+  throw new Error("Set FREN_PASSPHRASE_FILE (preferred) or FREN_PASSPHRASE.");
 }
 
 function main() {
-  const keystorePath = process.env.JARVIS_KEYSTORE;
-  if (!keystorePath) throw new Error("Set JARVIS_KEYSTORE to the keystore path.");
+  const keystorePath = process.env.FREN_KEYSTORE;
+  if (!keystorePath) throw new Error("Set FREN_KEYSTORE to the keystore path.");
   const keys = readKeystore(keystorePath, passphrase());
-  delete process.env.JARVIS_PASSPHRASE;
+  delete process.env.FREN_PASSPHRASE;
   const signer: SignerApi = createSigner(keys, {
-    ...(process.env.JARVIS_SOLANA_RPC ? { solanaRpcUrl: process.env.JARVIS_SOLANA_RPC } : {}),
-    ...(process.env.JARVIS_ARBITRUM_RPC ? { arbitrumRpcUrl: process.env.JARVIS_ARBITRUM_RPC } : {}),
+    ...(process.env.FREN_SOLANA_RPC ? { solanaRpcUrl: process.env.FREN_SOLANA_RPC } : {}),
+    ...(process.env.FREN_ARBITRUM_RPC ? { arbitrumRpcUrl: process.env.FREN_ARBITRUM_RPC } : {}),
   });
 
   const write = (res: SignerResponse) => process.stdout.write(`${JSON.stringify(res)}\n`);
@@ -62,6 +62,6 @@ function main() {
 try {
   main();
 } catch (err) {
-  process.stderr.write(`jarvis-signer: ${err instanceof Error ? err.message : String(err)}\n`);
+  process.stderr.write(`fren-signer: ${err instanceof Error ? err.message : String(err)}\n`);
   process.exit(1);
 }

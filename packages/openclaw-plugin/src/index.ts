@@ -4,20 +4,20 @@ import { EngineClient, type OwnerResult } from "./client.js";
 import planSchema from "./plan-schema.json" with { type: "json" };
 
 /**
- * Jarvis for OpenClaw. The agent gets tools that propose plans and read state;
+ * Fren for OpenClaw. The agent gets tools that propose plans and read state;
  * the owner gets slash commands (which bypass the model) for anything that
- * approves, loosens or resumes. Keys stay in the Jarvis engine's signer process.
+ * approves, loosens or resumes. Keys stay in the Fren engine's signer process.
  */
 
 export const TOOL_NAMES = [
-  "jarvis_wallet",
-  "jarvis_markets",
-  "jarvis_trade",
-  "jarvis_status",
-  "jarvis_cancel",
-  "jarvis_stop",
-  "jarvis_limits",
-  "jarvis_deposit_hyperliquid",
+  "fren_wallet",
+  "fren_markets",
+  "fren_trade",
+  "fren_status",
+  "fren_cancel",
+  "fren_stop",
+  "fren_limits",
+  "fren_deposit_hyperliquid",
 ] as const;
 
 type ToolName = (typeof TOOL_NAMES)[number];
@@ -40,64 +40,64 @@ async function deliverOwnerCode(res: OwnerResult, ctx: OpenClawPluginToolContext
   if (!res.ownerCode) return res.text;
   const send = ctx.delivery?.send;
   if (send) {
-    await send({ text: `🔐 Your Jarvis code: ${res.ownerCode}\nReply /ok ${res.ownerCode} to approve. Never share it.` });
+    await send({ text: `🔐 Your Fren code: ${res.ownerCode}\nReply /ok ${res.ownerCode} to approve. Never share it.` });
     return `${res.text}\n(The code was sent to the user directly; you do not have it and cannot approve on their behalf.)`;
   }
-  return `${res.text}\nNo private channel is set up, so ask the user to run /jarvis_code to see the code.`;
+  return `${res.text}\nNo private channel is set up, so ask the user to run /fren_code to see the code.`;
 }
 
 export function toolSpecs(client: EngineClient): ToolSpec[] {
   return [
     {
-      name: "jarvis_wallet",
-      label: "Jarvis wallet",
-      description: "Show the user's Jarvis wallet addresses, balances, and how to fund them.",
+      name: "fren_wallet",
+      label: "Fren wallet",
+      description: "Show the user's Fren wallet addresses, balances, and how to fund them.",
       parameters: Type.Object({}),
       run: async () => (await client.call<{ text: string }>("GET", "/wallet")).text,
     },
     {
-      name: "jarvis_markets",
+      name: "fren_markets",
       label: "Find a market",
       description:
-        "Search Hyperliquid perps (crypto, gold, stocks, indices) and Solana tokens. Call this before jarvis_trade whenever you are not sure of the exact symbol or mint.",
+        "Search Hyperliquid perps (crypto, gold, stocks, indices) and Solana tokens. Call this before fren_trade whenever you are not sure of the exact symbol or mint.",
       parameters: Type.Object({ query: Type.String({ description: 'What the user called it: "gold", "nasdaq", "BTC", "bonk", or a contract address.' }) }),
       run: async (p) => (await client.call<{ text: string }>("GET", `/markets?q=${encodeURIComponent(String(p.query))}`)).text,
     },
     {
-      name: "jarvis_trade",
+      name: "fren_trade",
       label: "Trade",
       description: [
-        "Propose a trading plan built from the user's request. Jarvis checks it against the user's limits, then either executes it,",
+        "Propose a trading plan built from the user's request. Fren checks it against the user's limits, then either executes it,",
         "asks the user for a confirmation code, or refuses with reasons. Relay the returned text to the user as-is.",
         "One plan can hold several legs; legs with `when` conditions wait for the watcher.",
-        "Never invent token addresses: use one the user gave or one jarvis_markets returned.",
+        "Never invent token addresses: use one the user gave or one fren_markets returned.",
       ].join(" "),
       parameters: Type.Object({ plan: Type.Unsafe<Record<string, unknown>>(planSchema) }),
       run: async (p, ctx) => deliverOwnerCode(await client.call<OwnerResult>("POST", "/plans", { plan: p.plan }), ctx),
     },
     {
-      name: "jarvis_status",
+      name: "fren_status",
       label: "Positions",
       description: "Show open positions, watched conditions with live values, pending approvals and today's spend.",
       parameters: Type.Object({}),
       run: async () => (await client.call<{ text: string }>("GET", "/status")).text,
     },
     {
-      name: "jarvis_cancel",
+      name: "fren_cancel",
       label: "Cancel plan",
-      description: "Cancel a waiting or unconfirmed plan by its id (shown in jarvis_status).",
+      description: "Cancel a waiting or unconfirmed plan by its id (shown in fren_status).",
       parameters: Type.Object({ planId: Type.String() }),
       run: async (p) => (await client.call<{ text: string }>("POST", "/cancel", { planId: p.planId })).text,
     },
     {
-      name: "jarvis_stop",
+      name: "fren_stop",
       label: "Kill switch",
-      description: 'Kill switch for "stop everything": pauses Jarvis, cancels waiting plans, and (flatten=true) closes all leveraged positions.',
+      description: 'Kill switch for "stop everything": pauses Fren, cancels waiting plans, and (flatten=true) closes all leveraged positions.',
       parameters: Type.Object({ flatten: Type.Boolean({ default: true }) }),
       run: async (p) => (await client.call<{ text: string }>("POST", "/stop", { flatten: p.flatten !== false })).text,
     },
     {
-      name: "jarvis_limits",
+      name: "fren_limits",
       label: "Limits",
       description:
         "Change the user's trading limits with key=value pairs: maxTradeUsd, maxDailyUsd, maxLeverage, maxOpenPositions, autoApproveUsd, mode (paper|live). Tightening applies at once; loosening sends the user a code. Pass an empty string to read the current limits.",
@@ -109,7 +109,7 @@ export function toolSpecs(client: EngineClient): ToolSpec[] {
       },
     },
     {
-      name: "jarvis_deposit_hyperliquid",
+      name: "fren_deposit_hyperliquid",
       label: "Fund Hyperliquid",
       description: "Move USDC from the user's own Arbitrum address into their own Hyperliquid account (minimum 5 USDC).",
       parameters: Type.Object({ amountUsd: Type.Number({ minimum: 5 }) }),
@@ -133,7 +133,7 @@ function registerTools(api: OpenClawPluginApi, client: EngineClient) {
             try {
               return text(await spec.run(params ?? {}, ctx));
             } catch (err) {
-              return text(`Jarvis error: ${(err as Error).message}`);
+              return text(`Fren error: ${(err as Error).message}`);
             }
           },
         };
@@ -143,7 +143,7 @@ function registerTools(api: OpenClawPluginApi, client: EngineClient) {
   }
 }
 
-/** The last code handed back when there was no private line, for /jarvis_code. Command replies never pass through the model. */
+/** The last code handed back when there was no private line, for /fren_code. Command replies never pass through the model. */
 let lastOwnerCode: { code: string; at: number } | null = null;
 
 function ownerReply(res: OwnerResult): string {
@@ -153,19 +153,19 @@ function ownerReply(res: OwnerResult): string {
 }
 
 function registerCommands(api: OpenClawPluginApi, client: EngineClient) {
-  const ownerOnly = "Only the owner of this Jarvis can do that.";
+  const ownerOnly = "Only the owner of this Fren can do that.";
   const guard = async (isOwner: boolean | undefined, run: () => Promise<string>) => {
     if (isOwner !== true) return { text: ownerOnly };
     try {
       return { text: await run() };
     } catch (err) {
-      return { text: `Jarvis error: ${(err as Error).message}` };
+      return { text: `Fren error: ${(err as Error).message}` };
     }
   };
 
   api.registerCommand({
     name: "ok",
-    description: "Approve a Jarvis plan or settings change with the code Jarvis sent you.",
+    description: "Approve a Fren plan or settings change with the code Fren sent you.",
     acceptsArgs: true,
     requireAuth: true,
     exposeSenderIsOwner: true,
@@ -179,7 +179,7 @@ function registerCommands(api: OpenClawPluginApi, client: EngineClient) {
 
   api.registerCommand({
     name: "stop",
-    description: "Kill switch: pause Jarvis and close leveraged positions. /stop keep pauses without closing.",
+    description: "Kill switch: pause Fren and close leveraged positions. /stop keep pauses without closing.",
     acceptsArgs: true,
     requireAuth: true,
     exposeSenderIsOwner: true,
@@ -192,7 +192,7 @@ function registerCommands(api: OpenClawPluginApi, client: EngineClient) {
 
   api.registerCommand({
     name: "resume",
-    description: "Turn Jarvis back on after /stop.",
+    description: "Turn Fren back on after /stop.",
     requireAuth: true,
     exposeSenderIsOwner: true,
     handler: (ctx) => guard(ctx.senderIsOwner, async () => ownerReply(await client.call<OwnerResult>("POST", "/resume"))),
@@ -200,7 +200,7 @@ function registerCommands(api: OpenClawPluginApi, client: EngineClient) {
 
   api.registerCommand({
     name: "limits",
-    description: "Show or change Jarvis limits, e.g. /limits maxTradeUsd=2000 maxLeverage=40 mode=live",
+    description: "Show or change Fren limits, e.g. /limits maxTradeUsd=2000 maxLeverage=40 mode=live",
     acceptsArgs: true,
     requireAuth: true,
     exposeSenderIsOwner: true,
@@ -214,7 +214,7 @@ function registerCommands(api: OpenClawPluginApi, client: EngineClient) {
 
   api.registerCommand({
     name: "positions",
-    description: "Jarvis positions and watched conditions.",
+    description: "Fren positions and watched conditions.",
     requireAuth: true,
     exposeSenderIsOwner: true,
     handler: (ctx) => guard(ctx.senderIsOwner, async () => (await client.call<{ text: string }>("GET", "/status")).text),
@@ -222,15 +222,15 @@ function registerCommands(api: OpenClawPluginApi, client: EngineClient) {
 
   api.registerCommand({
     name: "wallet",
-    description: "Jarvis wallet addresses and how to fund them.",
+    description: "Fren wallet addresses and how to fund them.",
     requireAuth: true,
     exposeSenderIsOwner: true,
     handler: (ctx) => guard(ctx.senderIsOwner, async () => (await client.call<{ text: string }>("GET", "/wallet")).text),
   });
 
   api.registerCommand({
-    name: "jarvis_code",
-    description: "Show the latest Jarvis approval code when no private channel is configured.",
+    name: "fren_code",
+    description: "Show the latest Fren approval code when no private channel is configured.",
     requireAuth: true,
     exposeSenderIsOwner: true,
     handler: (ctx) =>
@@ -242,9 +242,9 @@ function registerCommands(api: OpenClawPluginApi, client: EngineClient) {
 }
 
 export default definePluginEntry({
-  id: "jarvis",
-  name: "Jarvis",
-  description: "Trade perps, spot and more from chat. Keys stay in the local Jarvis engine.",
+  id: "fren",
+  name: "Fren",
+  description: "Trade perps, spot and more from chat. Keys stay in the local Fren engine.",
   register(api) {
     const cfg = (api.pluginConfig ?? {}) as { apiUrl?: string; tokenFile?: string };
     const client = new EngineClient({

@@ -1,6 +1,6 @@
 import { Connection, PublicKey, VersionedTransaction } from "@solana/web3.js";
-import { price as fmtPrice, usd as fmtUsd, type PlanStep, type ResolvedStep, type SwapLeg } from "@jarvis/core";
-import type { SignerApi } from "@jarvis/signer";
+import { price as fmtPrice, usd as fmtUsd, type PlanStep, type ResolvedStep, type SwapLeg } from "@fren/core";
+import type { SignerApi } from "@fren/signer";
 import { getJson, postJson, type Fetch } from "../http.js";
 import type { Store } from "../store.js";
 import { VenueError, type ExecContext, type ExecResult, type PositionView, type VenueAdapter } from "./types.js";
@@ -179,7 +179,7 @@ export class JupiterVenue implements VenueAdapter {
   // -- live ------------------------------------------------------------------
 
   private signer(): SignerApi {
-    if (!this.o.signer) throw new VenueError("Live trading needs wallets. Run `jarvis init` first.");
+    if (!this.o.signer) throw new VenueError("Live trading needs wallets. Run `fren init` first.");
     return this.o.signer;
   }
 

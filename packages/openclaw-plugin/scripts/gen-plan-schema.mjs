@@ -1,8 +1,8 @@
-// Regenerates src/plan-schema.json from the Plan schema in @jarvis/core, so the
+// Regenerates src/plan-schema.json from the Plan schema in @fren/core, so the
 // plugin can describe the tool input without depending on core at runtime.
 import { writeFileSync } from "node:fs";
 import { z } from "zod";
-import { Plan } from "@jarvis/core";
+import { Plan } from "@fren/core";
 
 const schema = z.toJSONSchema(Plan, { io: "input", target: "draft-7" });
 delete schema.$schema;

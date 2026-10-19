@@ -1,4 +1,4 @@
-import type { PlanStep, ResolvedStep, Venue } from "@jarvis/core";
+import type { PlanStep, ResolvedStep, Venue } from "@fren/core";
 import type { Mode } from "../store.js";
 
 export interface ExecContext {

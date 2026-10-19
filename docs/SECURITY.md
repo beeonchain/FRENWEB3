@@ -1,6 +1,6 @@
 # Security model
 
-Jarvis trades with real money from a chat window, inside an agent that reads tweets, token metadata and messages from strangers. The design assumes the model **will** be prompt-injected at some point and limits what that can do.
+Fren trades with real money from a chat window, inside an agent that reads tweets, token metadata and messages from strangers. The design assumes the model **will** be prompt-injected at some point and limits what that can do.
 
 ## Layers
 
@@ -11,14 +11,14 @@ Jarvis trades with real money from a chat window, inside an agent that reads twe
    - signs only Hyperliquid trading actions (order, cancel, modify, leverage) with the **agent key**, which Hyperliquid itself prevents from withdrawing;
    - uses the master EVM key only to approve its own agent key, and to send USDC from Arbitrum to Hyperliquid's bridge, which credits the same account;
    - on Solana, requires the wallet to pay the fee and allows only Jupiter, token-account and compute-budget programs at the top level. It refuses SOL or token transfers to anyone else, token approvals and authority changes, caps priority fees, and simulates the transaction to cap SOL loss.
-5. **Keys at rest.** The keystore is AES-256-GCM encrypted with a scrypt-derived key. By default the passphrase is a random file next to it (`~/.jarvis/signer.pass`, mode 600).
+5. **Keys at rest.** The keystore is AES-256-GCM encrypted with a scrypt-derived key. By default the passphrase is a random file next to it (`~/.fren/signer.pass`, mode 600).
 
 ## Known gaps
 
-- **Same OS user.** By default the engine, signer and OpenClaw run as the same user. OpenClaw agents often have shell tools, so an injected agent could read `~/.jarvis` (the database, the token, and the passphrase file). For real money:
-  - run the engine and signer as a separate user (`jarvis`), with `~/.jarvis` owned by that user and mode 700;
+- **Same OS user.** By default the engine, signer and OpenClaw run as the same user. OpenClaw agents often have shell tools, so an injected agent could read `~/.fren` (the database, the token, and the passphrase file). For real money:
+  - run the engine and signer as a separate user (`fren`), with `~/.fren` owned by that user and mode 700;
   - give OpenClaw's user only a copy of `api-token`;
-  - or set `JARVIS_SIGNER_PREFIX="sudo -u jarvis-signer"` to run just the signer as another user.
+  - or set `FREN_SIGNER_PREFIX="sudo -u fren-signer"` to run just the signer as another user.
 - **No private line without Telegram.** Without `telegram` in the config, codes go out through OpenClaw's own delivery to the conversation. That is best-effort, and the code may end up in the transcript the model can read. Configure Telegram for live trading.
 - **Solana has no trade-only key.** The signer's static checks and simulation catch transfers at the top level. Jupiter's routed inner instructions are trusted because they run inside the Jupiter program. On-chain spending limits (a Squads smart wallet) are the planned upgrade.
-- **Third-party skills.** ClawHub has shipped hundreds of malicious skills aimed at crypto users. Don't install unknown skills on the box that runs Jarvis.
+- **Third-party skills.** ClawHub has shipped hundreds of malicious skills aimed at crypto users. Don't install unknown skills on the box that runs Fren.

@@ -2,25 +2,25 @@
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { parseArgs } from "node:util";
-import { generateKeys, readKeystoreAddresses, writeKeystore } from "@jarvis/signer";
-import { jarvisPaths, JarvisConfig, loadConfig } from "./config.js";
+import { generateKeys, readKeystoreAddresses, writeKeystore } from "@fren/signer";
+import { frenPaths, FrenConfig, loadConfig } from "./config.js";
 import { startDaemon } from "./daemon.js";
 
-const HELP = `jarvis: self-hosted on-chain trading agent backend
+const HELP = `fren: self-hosted on-chain trading agent backend
 
-  jarvis init [--network testnet|mainnet] [--telegram-token T --telegram-chat ID]
-      Create wallets, an API token and a config in $JARVIS_HOME (default ~/.jarvis).
-  jarvis start
+  fren init [--network testnet|mainnet] [--telegram-token T --telegram-chat ID]
+      Create wallets, an API token and a config in $FREN_HOME (default ~/.fren).
+  fren start
       Run the engine: signer process, local API for OpenClaw and the watcher.
-  jarvis wallet
+  fren wallet
       Print wallet addresses.
-  jarvis status
+  fren status
       Ask the running engine for positions and watched conditions.
 `;
 
 async function main() {
   const [cmd, ...rest] = process.argv.slice(2);
-  const paths = jarvisPaths();
+  const paths = frenPaths();
 
   switch (cmd) {
     case "init": {
@@ -40,7 +40,7 @@ async function main() {
         writeKeystore(paths.keystore, generateKeys(), readFileSync(paths.passphrase, "utf8").trim());
       }
       const existing = existsSync(paths.config) ? (JSON.parse(readFileSync(paths.config, "utf8")) as Record<string, unknown>) : {};
-      const config = JarvisConfig.parse({
+      const config = FrenConfig.parse({
         ...existing,
         network: values.network,
         ...(values["solana-rpc"] ? { solanaRpcUrl: values["solana-rpc"] } : {}),
@@ -50,13 +50,13 @@ async function main() {
       });
       writeFileSync(paths.config, JSON.stringify(config, null, 2), { mode: 0o600 });
       const a = readKeystoreAddresses(paths.keystore);
-      console.log(`Jarvis is set up in ${paths.home} (${config.network}, paper mode until you switch it).
+      console.log(`Fren is set up in ${paths.home} (${config.network}, paper mode until you switch it).
 
 Solana wallet:      ${a.solana}
 EVM / Hyperliquid:  ${a.evm}
 Trading-only key:   ${a.hlAgent}
 
-Next: \`jarvis start\`, then install the OpenClaw plugin (see README).`);
+Next: \`fren start\`, then install the OpenClaw plugin (see README).`);
       if (!config.telegram) {
         console.log(`\nTip: add --telegram-token and --telegram-chat so confirmation codes reach you directly, never through the agent.`);
       }

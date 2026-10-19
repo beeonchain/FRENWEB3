@@ -8,7 +8,7 @@ export interface EngineClientOptions {
   fetchFn?: typeof fetch;
 }
 
-/** Thin HTTP client for the local Jarvis engine. Holds a token, never a key. */
+/** Thin HTTP client for the local Fren engine. Holds a token, never a key. */
 export class EngineClient {
   readonly apiUrl: string;
   private readonly tokenFile: string;
@@ -16,7 +16,7 @@ export class EngineClient {
 
   constructor(o: EngineClientOptions = {}) {
     this.apiUrl = (o.apiUrl ?? "http://127.0.0.1:7420").replace(/\/$/, "");
-    this.tokenFile = o.tokenFile ?? join(process.env.JARVIS_HOME ?? join(homedir(), ".jarvis"), "api-token");
+    this.tokenFile = o.tokenFile ?? join(process.env.FREN_HOME ?? join(homedir(), ".fren"), "api-token");
     this.fetchFn = o.fetchFn ?? fetch;
   }
 
@@ -24,7 +24,7 @@ export class EngineClient {
     try {
       return readFileSync(this.tokenFile, "utf8").trim();
     } catch {
-      throw new Error(`Jarvis engine token not found at ${this.tokenFile}. Run \`jarvis init\` and \`jarvis start\`.`);
+      throw new Error(`Fren engine token not found at ${this.tokenFile}. Run \`fren init\` and \`fren start\`.`);
     }
   }
 
@@ -37,10 +37,10 @@ export class EngineClient {
         ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
       });
     } catch {
-      throw new Error(`Can't reach the Jarvis engine at ${this.apiUrl}. Is \`jarvis start\` running?`);
+      throw new Error(`Can't reach the Fren engine at ${this.apiUrl}. Is \`fren start\` running?`);
     }
     const json = (await res.json()) as T & { error?: string };
-    if (!res.ok) throw new Error(json.error ?? `Jarvis engine returned ${res.status}`);
+    if (!res.ok) throw new Error(json.error ?? `Fren engine returned ${res.status}`);
     return json;
   }
 }

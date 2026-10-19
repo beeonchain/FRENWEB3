@@ -1,9 +1,9 @@
 {
-  "name": "@jarvis/openclaw-plugin",
+  "name": "@fren/openclaw-plugin",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Jarvis for OpenClaw: trade on-chain from chat. Talks to the local Jarvis engine; never holds keys.",
+  "description": "Fren for OpenClaw: trade on-chain from chat. Talks to the local Fren engine; never holds keys.",
   "main": "./dist/index.js",
   "files": [
     "dist/",
@@ -17,8 +17,8 @@
     "typebox": "1.3.34"
   },
   "devDependencies": {
-    "@jarvis/core": "0.1.0",
-    "@jarvis/engine": "0.1.0",
+    "@fren/core": "0.1.0",
+    "@fren/engine": "0.1.0",
     "openclaw": "2026.10.5",
     "zod": "^4.1.0"
   },

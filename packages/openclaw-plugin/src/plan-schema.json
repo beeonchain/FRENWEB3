@@ -34,7 +34,7 @@
                   "market": {
                     "type": "string",
                     "minLength": 1,
-                    "description": "Hyperliquid symbol from jarvis_markets, e.g. \"BTC\" or \"xyz:GOLD\" for builder-deployed markets."
+                    "description": "Hyperliquid symbol from fren_markets, e.g. \"BTC\" or \"xyz:GOLD\" for builder-deployed markets."
                   },
                   "side": {
                     "type": "string",

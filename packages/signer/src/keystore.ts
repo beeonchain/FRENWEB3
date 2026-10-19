@@ -5,7 +5,7 @@ import { Keypair } from "@solana/web3.js";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
 /**
- * Every key Jarvis holds. Lives only inside the signer process; the engine and
+ * Every key Fren holds. Lives only inside the signer process; the engine and
  * the agent see addresses, never this object.
  */
 export interface KeyMaterial {

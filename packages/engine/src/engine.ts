@@ -20,15 +20,15 @@ import {
   type PolicyDecision,
   type ResolvedStep,
   type Venue,
-} from "@jarvis/core";
-import type { Addresses, SignerApi } from "@jarvis/signer";
+} from "@fren/core";
+import type { Addresses, SignerApi } from "@fren/signer";
 import type { Notifier } from "./notify.js";
 import type { Mode, PendingKind, Store } from "./store.js";
 import type { HyperliquidVenue } from "./venues/hyperliquid.js";
 import type { JupiterVenue } from "./venues/jupiter.js";
 import { VenueError, type PositionView, type VenueAdapter } from "./venues/types.js";
 
-export interface JarvisDeps {
+export interface FrenDeps {
   store: Store;
   hyperliquid: HyperliquidVenue;
   jupiter: JupiterVenue;
@@ -65,11 +65,11 @@ function newCode(): string {
   return Array.from(bytes, (b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join("");
 }
 
-export class Jarvis {
+export class Fren {
   private readonly venues: Record<Venue, VenueAdapter>;
   private ticking = false;
 
-  constructor(private readonly d: JarvisDeps) {
+  constructor(private readonly d: FrenDeps) {
     this.venues = { hyperliquid: d.hyperliquid, jupiter: d.jupiter };
   }
 
@@ -218,7 +218,7 @@ export class Jarvis {
     }
     if (p.kind === "resume") {
       this.d.store.setLimits({ ...this.limits(), paused: false });
-      return "✅ Jarvis is back on. The watcher is running again.";
+      return "✅ Fren is back on. The watcher is running again.";
     }
     const rec = this.d.store.getPlan(p.payload);
     if (!rec || rec.status !== "pending_confirm") return "That plan is no longer waiting for approval.";
@@ -255,8 +255,8 @@ export class Jarvis {
   }
 
   async requestResume(): Promise<OwnerRequestResult> {
-    if (!this.limits().paused) return { text: "Jarvis isn't stopped." };
-    return this.issueCode("resume", "", "Turn Jarvis back on?");
+    if (!this.limits().paused) return { text: "Fren isn't stopped." };
+    return this.issueCode("resume", "", "Turn Fren back on?");
   }
 
   // -- kill switch -----------------------------------------------------------
@@ -425,7 +425,7 @@ export class Jarvis {
 
   async wallet(): Promise<{ text: string; addresses: Addresses | null }> {
     const signer = this.d.signer;
-    if (!signer) return { text: "No wallets yet. Run `jarvis init` on the machine Jarvis runs on.", addresses: null };
+    if (!signer) return { text: "No wallets yet. Run `fren init` on the machine Fren runs on.", addresses: null };
     const a = await signer.addresses();
     const [usdc, hl] = await Promise.all([
       this.d.jupiter.usdcBalance().catch(() => null),
@@ -433,7 +433,7 @@ export class Jarvis {
     ]);
     const net = this.d.isTestnet ? " (testnet)" : "";
     const text = [
-      "Your Jarvis wallets. Only this machine holds the keys.",
+      "Your Fren wallets. Only this machine holds the keys.",
       "",
       `Solana: ${a.solana}`,
       `  Send USDC (SPL) here for spot trades, plus about 0.05 SOL for fees.${usdc !== null ? ` Balance: ${fmtUsd(usdc)} USDC.` : ""}`,
@@ -447,8 +447,8 @@ export class Jarvis {
   }
 
   async depositToHyperliquid(amountUsd: number): Promise<string> {
-    if (!this.d.signer) return "No wallets yet. Run `jarvis init` first.";
-    if (this.limits().paused) return "Jarvis is stopped. Send /resume first.";
+    if (!this.d.signer) return "No wallets yet. Run `fren init` first.";
+    if (this.limits().paused) return "Fren is stopped. Send /resume first.";
     const { txHash } = await this.d.signer.hlDepositFromArbitrum({ amountUsd, isTestnet: this.d.isTestnet });
     const explorer = this.d.isTestnet ? "https://sepolia.arbiscan.io/tx/" : "https://arbiscan.io/tx/";
     return `✅ Sent ${fmtUsd(amountUsd)} USDC from Arbitrum to your Hyperliquid account. It usually lands in about a minute. ${explorer}${txHash}`;

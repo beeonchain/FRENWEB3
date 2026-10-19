@@ -1,8 +1,8 @@
 import { canonicalize } from "@nktkas/hyperliquid/signing";
 import { OrderRequest, UpdateLeverageRequest } from "@nktkas/hyperliquid/api/exchange";
 import { formatPrice, formatSize } from "@nktkas/hyperliquid/utils";
-import { price as fmtPrice, signedUsd, usd as fmtUsd, type PerpCloseLeg, type PerpOpenLeg, type PlanStep, type ResolvedStep } from "@jarvis/core";
-import type { SignerApi } from "@jarvis/signer";
+import { price as fmtPrice, signedUsd, usd as fmtUsd, type PerpCloseLeg, type PerpOpenLeg, type PlanStep, type ResolvedStep } from "@fren/core";
+import type { SignerApi } from "@fren/signer";
 import { postJson, type Fetch } from "../http.js";
 import type { Store } from "../store.js";
 import { HyperliquidMarkets, type PerpMarket } from "./hyperliquid-markets.js";
@@ -113,7 +113,7 @@ export class HyperliquidVenue implements VenueAdapter {
     if (!m) {
       const near = (await this.markets.search(symbol, 4)).map((x) => x.name);
       throw new VenueError(
-        `No Hyperliquid market called ${symbol}.${near.length ? ` Closest: ${near.join(", ")}.` : " Search with jarvis_markets."}`,
+        `No Hyperliquid market called ${symbol}.${near.length ? ` Closest: ${near.join(", ")}.` : " Search with fren_markets."}`,
       );
     }
     return m;
@@ -210,7 +210,7 @@ export class HyperliquidVenue implements VenueAdapter {
   // -- live ------------------------------------------------------------------
 
   private signer(): SignerApi {
-    if (!this.o.signer) throw new VenueError("Live trading needs wallets. Run `jarvis init` first.");
+    if (!this.o.signer) throw new VenueError("Live trading needs wallets. Run `fren init` first.");
     return this.o.signer;
   }
 

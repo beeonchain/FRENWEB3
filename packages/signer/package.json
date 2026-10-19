@@ -1,5 +1,5 @@
 {
-  "name": "@jarvis/signer",
+  "name": "@fren/signer",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -12,7 +12,7 @@
     }
   },
   "bin": {
-    "jarvis-signer": "./dist/server.js"
+    "fren-signer": "./dist/server.js"
   },
   "dependencies": {
     "@nktkas/hyperliquid": "^0.33.3",

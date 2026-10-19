@@ -60,7 +60,7 @@ export function evaluatePolicy(
 ): PolicyDecision {
   const planReasons: string[] = [];
   if (limits.paused) {
-    planReasons.push("Jarvis is stopped. Send /resume to trade again.");
+    planReasons.push("Fren is stopped. Send /resume to trade again.");
   }
 
   let newPositions = 0;

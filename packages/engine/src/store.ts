@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { DEFAULT_LIMITS, Limits, type Plan, type ResolvedStep } from "@jarvis/core";
+import { DEFAULT_LIMITS, Limits, type Plan, type ResolvedStep } from "@fren/core";
 
 /**
  * Single-file local state (SQLite), so a user's whole setup is one folder they

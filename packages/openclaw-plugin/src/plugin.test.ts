@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createApi, Jarvis, MemoryNotifier, Store, HyperliquidVenue, JupiterVenue } from "@jarvis/engine";
+import { createApi, Fren, MemoryNotifier, Store, HyperliquidVenue, JupiterVenue } from "@fren/engine";
 import { FakeVenues } from "../../engine/src/testing.js";
 import plugin, { TOOL_NAMES } from "./index.js";
 
@@ -21,13 +21,13 @@ function loadPlugin(pluginConfig: Record<string, unknown>): Registered {
 }
 
 describe("OpenClaw plugin against a real engine", () => {
-  const dir = mkdtempSync(join(tmpdir(), "jarvis-plugin-"));
+  const dir = mkdtempSync(join(tmpdir(), "fren-plugin-"));
   const tokenFile = join(dir, "api-token");
   writeFileSync(tokenFile, "plugin-test-token");
   const fake = new FakeVenues();
   const store = new Store(":memory:");
   const notifier = new MemoryNotifier(store, false); // no private line: codes must go out via delivery.send
-  const jarvis = new Jarvis({
+  const fren = new Fren({
     store,
     notifier,
     signer: null,
@@ -35,7 +35,7 @@ describe("OpenClaw plugin against a real engine", () => {
     hyperliquid: new HyperliquidVenue({ fetchFn: fake.fetch, apiUrl: "https://hl.test", isTestnet: true, store, signer: null }),
     jupiter: new JupiterVenue({ fetchFn: fake.fetch, apiUrl: "https://jup.test", solanaRpcUrl: "https://rpc.test", store, signer: null }),
   });
-  const server = createApi(jarvis, "plugin-test-token");
+  const server = createApi(fren, "plugin-test-token");
   let reg: Registered;
 
   beforeAll(async () => {
@@ -53,18 +53,18 @@ describe("OpenClaw plugin against a real engine", () => {
 
   it("registers every declared tool and the owner commands", () => {
     expect([...reg.tools.keys()].sort()).toEqual([...TOOL_NAMES].sort());
-    expect([...reg.commands.keys()].sort()).toEqual(["jarvis_code", "limits", "ok", "positions", "resume", "stop", "wallet"]);
+    expect([...reg.commands.keys()].sort()).toEqual(["fren_code", "limits", "ok", "positions", "resume", "stop", "wallet"]);
   });
 
   it("hides trading tools from people who aren't the owner", () => {
-    expect(reg.tools.get("jarvis_trade")!({ senderIsOwner: false })).toBeNull();
+    expect(reg.tools.get("fren_trade")!({ senderIsOwner: false })).toBeNull();
   });
 
   it("sends the code around the model and lets only the owner approve it", async () => {
     const delivered: string[] = [];
     const ctx = { senderIsOwner: true, delivery: { send: async (m: { text: string }) => void delivered.push(m.text) } };
     const out = await run(
-      "jarvis_trade",
+      "fren_trade",
       {
         plan: {
           request: "long gold 10x with $300",
@@ -75,11 +75,11 @@ describe("OpenClaw plugin against a real engine", () => {
     );
     expect(out).toMatch(/No Hyperliquid market called gold/);
 
-    const markets = await run("jarvis_markets", { query: "gold" });
+    const markets = await run("fren_markets", { query: "gold" });
     expect(markets).toContain("xyz:GOLD");
 
     const out2 = await run(
-      "jarvis_trade",
+      "fren_trade",
       {
         plan: {
           request: "long gold 10x with $300",
@@ -108,7 +108,7 @@ describe("OpenClaw plugin against a real engine", () => {
 
   it("explains when the engine isn't running", async () => {
     const dead = loadPlugin({ apiUrl: "http://127.0.0.1:9", tokenFile });
-    const res = await dead.tools.get("jarvis_status")!({ senderIsOwner: true }).execute("x", {});
-    expect(res.content[0].text).toMatch(/Can't reach the Jarvis engine/);
+    const res = await dead.tools.get("fren_status")!({ senderIsOwner: true }).execute("x", {});
+    expect(res.content[0].text).toMatch(/Can't reach the Fren engine/);
   });
 });

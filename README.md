@@ -1,4 +1,4 @@
-# Jarvis (working name)
+# Fren
 
 A self-hosted [OpenClaw](https://github.com/openclaw/openclaw) agent that trades on-chain from a chat window. Tell it in Telegram, "long gold 20x with $500, stop at -30%," and it finds the market, checks your limits, signs with keys that never leave your machine, and replies once with what it did.
 
@@ -9,10 +9,10 @@ Status: **early backend**. It does Hyperliquid perps (crypto, gold, stocks, indi
 ```
 Telegram / WhatsApp
       │
-OpenClaw agent ── jarvis plugin (tools + /ok /stop /limits /resume)
+OpenClaw agent ── fren plugin (tools + /ok /stop /limits /resume)
       │  plans only, no keys
       ▼
-jarvis engine (local HTTP API on 127.0.0.1)
+fren engine (local HTTP API on 127.0.0.1)
   ├─ policy: your caps, leverage, venues, daily spend. No LLM.
   ├─ venues: Hyperliquid, Jupiter (paper or live)
   ├─ watcher: checks conditions every 15s and fires plans. No LLM.
@@ -20,13 +20,13 @@ jarvis engine (local HTTP API on 127.0.0.1)
      transfers to strangers and unknown programs
 ```
 
-The model thinks, but it never signs and never polls. Anything that spends over your auto-approve level, loosens a limit, or turns Jarvis back on after a stop needs a code that goes straight to you on Telegram. The agent never sees the code. See [docs/SECURITY.md](docs/SECURITY.md).
+The model thinks, but it never signs and never polls. Anything that spends over your auto-approve level, loosens a limit, or turns Fren back on after a stop needs a code that goes straight to you on Telegram. The agent never sees the code. See [docs/SECURITY.md](docs/SECURITY.md).
 
 | Package | What |
 | --- | --- |
 | `packages/core` | Plan schema, policy engine, condition evaluation, plain-English rendering. Pure and heavily tested. |
 | `packages/signer` | Encrypted keystore, wallet creation, and the signer process with its hard rules. |
-| `packages/engine` | The `jarvis` CLI and daemon: venues, watcher, SQLite state, local API. |
+| `packages/engine` | The `fren` CLI and daemon: venues, watcher, SQLite state, local API. |
 | `packages/openclaw-plugin` | The OpenClaw plugin: agent tools, owner commands, and the skill that teaches the agent the grammar. |
 
 ## Quick start
@@ -37,7 +37,7 @@ Needs Node 24.16+ and OpenClaw 2026.10.5+.
 npm ci
 npm run build
 
-# Create wallets, API token and config in ~/.jarvis. Starts in paper mode on Hyperliquid testnet.
+# Create wallets, API token and config in ~/.fren. Starts in paper mode on Hyperliquid testnet.
 node packages/engine/dist/cli.js init --network testnet \
   --telegram-token <your OpenClaw Telegram bot token> --telegram-chat <your Telegram user id>
 
@@ -61,7 +61,7 @@ Owner commands, which skip the model:
 | --- | --- |
 | `/ok CODE` | Approve a plan or a settings change |
 | `/stop` (or `/stop keep`) | Kill switch: pause, cancel waiting plans, close leveraged positions (or keep them) |
-| `/resume` | Turn Jarvis back on (sends a code) |
+| `/resume` | Turn Fren back on (sends a code) |
 | `/limits key=value …` | e.g. `/limits mode=live maxTradeUsd=2000 maxLeverage=40` (loosening sends a code) |
 | `/positions`, `/wallet` | Read-only views |
 

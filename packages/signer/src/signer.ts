@@ -49,7 +49,7 @@ export interface SignerOptions {
   arbitrumRpcUrl?: string;
 }
 
-export const HL_AGENT_NAME = "jarvis";
+export const HL_AGENT_NAME = "fren";
 
 export function createSigner(keys: KeyMaterial, options: SignerOptions = {}): SignerApi {
   const addresses = addressesOf(keys);
