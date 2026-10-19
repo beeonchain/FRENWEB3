@@ -1,0 +1,36 @@
+{
+  "id": "fren",
+  "name": "Fren",
+  "description": "Trade perps, spot and more from chat. Keys stay in the local Fren engine, never in the agent.",
+  "categories": ["finance-payments"],
+  "skills": ["./skills"],
+  "contracts": {
+    "tools": [
+      "fren_wallet",
+      "fren_markets",
+      "fren_trade",
+      "fren_status",
+      "fren_cancel",
+      "fren_stop",
+      "fren_limits",
+      "fren_deposit_hyperliquid"
+    ]
+  },
+  "activation": {
+    "onStartup": true
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "apiUrl": {
+        "type": "string",
+        "description": "Fren engine URL. Default http://127.0.0.1:7420"
+      },
+      "tokenFile": {
+        "type": "string",
+        "description": "Path to the engine API token. Default ~/.fren/api-token"
+      }
+    }
+  }
+}

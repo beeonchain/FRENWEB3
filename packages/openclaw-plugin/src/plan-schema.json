@@ -1,0 +1,363 @@
+{
+  "type": "object",
+  "properties": {
+    "version": {
+      "default": 1,
+      "type": "number",
+      "const": 1
+    },
+    "request": {
+      "type": "string",
+      "maxLength": 2000,
+      "description": "The user's message, quoted verbatim."
+    },
+    "steps": {
+      "minItems": 1,
+      "maxItems": 10,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "leg": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "perp_open"
+                  },
+                  "venue": {
+                    "type": "string",
+                    "const": "hyperliquid"
+                  },
+                  "market": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Hyperliquid symbol from fren_markets, e.g. \"BTC\" or \"xyz:GOLD\" for builder-deployed markets."
+                  },
+                  "side": {
+                    "type": "string",
+                    "enum": [
+                      "long",
+                      "short"
+                    ]
+                  },
+                  "sizing": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "margin"
+                          },
+                          "usd": {
+                            "type": "number",
+                            "exclusiveMinimum": 0
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "usd"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "notional"
+                          },
+                          "usd": {
+                            "type": "number",
+                            "exclusiveMinimum": 0
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "usd"
+                        ]
+                      }
+                    ],
+                    "description": "\"margin\" = collateral the user puts up (\"use $2000 as collateral\"); \"notional\" = full position size."
+                  },
+                  "leverage": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1000
+                  },
+                  "stopLossPct": {
+                    "description": "Stop loss as % of margin lost (ROE). 'Stop at -15%' means 15.",
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 100
+                  },
+                  "takeProfitPct": {
+                    "description": "Take profit as % gained on margin (ROE).",
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 10000
+                  },
+                  "stopPrice": {
+                    "description": "Absolute stop price, when the user names a level.",
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "takeProfitPrice": {
+                    "description": "Absolute take-profit price.",
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "maxSlippagePct": {
+                    "default": 1,
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 10
+                  }
+                },
+                "required": [
+                  "kind",
+                  "venue",
+                  "market",
+                  "side",
+                  "sizing",
+                  "leverage"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "perp_close"
+                  },
+                  "venue": {
+                    "type": "string",
+                    "const": "hyperliquid"
+                  },
+                  "market": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "fraction": {
+                    "default": 1,
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 1
+                  },
+                  "maxSlippagePct": {
+                    "default": 1,
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 10
+                  }
+                },
+                "required": [
+                  "kind",
+                  "venue",
+                  "market"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "swap"
+                  },
+                  "venue": {
+                    "type": "string",
+                    "const": "jupiter"
+                  },
+                  "side": {
+                    "type": "string",
+                    "enum": [
+                      "buy",
+                      "sell"
+                    ]
+                  },
+                  "token": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Token mint (contract address) or a ticker. Tickers only resolve to verified tokens."
+                  },
+                  "amount": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "usd"
+                          },
+                          "usd": {
+                            "type": "number",
+                            "exclusiveMinimum": 0
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "usd"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "fraction"
+                          },
+                          "fraction": {
+                            "type": "number",
+                            "exclusiveMinimum": 0,
+                            "maximum": 1
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "fraction"
+                        ]
+                      }
+                    ],
+                    "description": "Buys: {type:\"usd\"} spends that much USDC. Sells: {type:\"fraction\"} of the balance, or {type:\"usd\"} worth."
+                  },
+                  "maxSlippageBps": {
+                    "default": 100,
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 5000
+                  }
+                },
+                "required": [
+                  "kind",
+                  "venue",
+                  "side",
+                  "token",
+                  "amount"
+                ]
+              }
+            ]
+          },
+          "when": {
+            "default": [],
+            "description": "All must hold before the leg fires. Omit or [] to fire now.",
+            "maxItems": 8,
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "price"
+                    },
+                    "venue": {
+                      "type": "string",
+                      "enum": [
+                        "hyperliquid",
+                        "jupiter"
+                      ]
+                    },
+                    "market": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "op": {
+                      "type": "string",
+                      "enum": [
+                        ">",
+                        ">=",
+                        "<",
+                        "<="
+                      ]
+                    },
+                    "value": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "venue",
+                    "market",
+                    "op",
+                    "value"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "funding"
+                    },
+                    "venue": {
+                      "type": "string",
+                      "const": "hyperliquid"
+                    },
+                    "market": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "op": {
+                      "type": "string",
+                      "enum": [
+                        ">",
+                        ">=",
+                        "<",
+                        "<="
+                      ]
+                    },
+                    "value": {
+                      "type": "number",
+                      "description": "Hourly funding in percent: 0.02 means 0.02%/h."
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "venue",
+                    "market",
+                    "op",
+                    "value"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "time"
+                    },
+                    "after": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "after"
+                  ]
+                }
+              ]
+            }
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          }
+        },
+        "required": [
+          "leg"
+        ]
+      }
+    }
+  },
+  "required": [
+    "request",
+    "steps"
+  ]
+}
