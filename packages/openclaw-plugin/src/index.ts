@@ -1,0 +1,258 @@
+import { Type, type TSchema } from "typebox";
+import { definePluginEntry, type OpenClawPluginApi, type OpenClawPluginToolContext } from "openclaw/plugin-sdk/plugin-entry";
+import { EngineClient, type OwnerResult } from "./client.js";
+import planSchema from "./plan-schema.json" with { type: "json" };
+
+/**
+ * Jarvis for OpenClaw. The agent gets tools that propose plans and read state;
+ * the owner gets slash commands (which bypass the model) for anything that
+ * approves, loosens or resumes. Keys stay in the Jarvis engine's signer process.
+ */
+
+export const TOOL_NAMES = [
+  "jarvis_wallet",
+  "jarvis_markets",
+  "jarvis_trade",
+  "jarvis_status",
+  "jarvis_cancel",
+  "jarvis_stop",
+  "jarvis_limits",
+  "jarvis_deposit_hyperliquid",
+] as const;
+
+type ToolName = (typeof TOOL_NAMES)[number];
+
+interface ToolSpec {
+  name: ToolName;
+  label: string;
+  description: string;
+  parameters: TSchema;
+  run(params: Record<string, unknown>, ctx: OpenClawPluginToolContext): Promise<string>;
+}
+
+const text = (t: string) => ({ content: [{ type: "text" as const, text: t }], details: { text: t } });
+
+/**
+ * When the engine has no private line to the owner it hands back the code. Send
+ * it straight to the conversation and keep it out of the model's tool result.
+ */
+async function deliverOwnerCode(res: OwnerResult, ctx: OpenClawPluginToolContext): Promise<string> {
+  if (!res.ownerCode) return res.text;
+  const send = ctx.delivery?.send;
+  if (send) {
+    await send({ text: `🔐 Your Jarvis code: ${res.ownerCode}\nReply /ok ${res.ownerCode} to approve. Never share it.` });
+    return `${res.text}\n(The code was sent to the user directly; you do not have it and cannot approve on their behalf.)`;
+  }
+  return `${res.text}\nNo private channel is set up, so ask the user to run /jarvis_code to see the code.`;
+}
+
+export function toolSpecs(client: EngineClient): ToolSpec[] {
+  return [
+    {
+      name: "jarvis_wallet",
+      label: "Jarvis wallet",
+      description: "Show the user's Jarvis wallet addresses, balances, and how to fund them.",
+      parameters: Type.Object({}),
+      run: async () => (await client.call<{ text: string }>("GET", "/wallet")).text,
+    },
+    {
+      name: "jarvis_markets",
+      label: "Find a market",
+      description:
+        "Search Hyperliquid perps (crypto, gold, stocks, indices) and Solana tokens. Call this before jarvis_trade whenever you are not sure of the exact symbol or mint.",
+      parameters: Type.Object({ query: Type.String({ description: 'What the user called it: "gold", "nasdaq", "BTC", "bonk", or a contract address.' }) }),
+      run: async (p) => (await client.call<{ text: string }>("GET", `/markets?q=${encodeURIComponent(String(p.query))}`)).text,
+    },
+    {
+      name: "jarvis_trade",
+      label: "Trade",
+      description: [
+        "Propose a trading plan built from the user's request. Jarvis checks it against the user's limits, then either executes it,",
+        "asks the user for a confirmation code, or refuses with reasons. Relay the returned text to the user as-is.",
+        "One plan can hold several legs; legs with `when` conditions wait for the watcher.",
+        "Never invent token addresses: use one the user gave or one jarvis_markets returned.",
+      ].join(" "),
+      parameters: Type.Object({ plan: Type.Unsafe<Record<string, unknown>>(planSchema) }),
+      run: async (p, ctx) => deliverOwnerCode(await client.call<OwnerResult>("POST", "/plans", { plan: p.plan }), ctx),
+    },
+    {
+      name: "jarvis_status",
+      label: "Positions",
+      description: "Show open positions, watched conditions with live values, pending approvals and today's spend.",
+      parameters: Type.Object({}),
+      run: async () => (await client.call<{ text: string }>("GET", "/status")).text,
+    },
+    {
+      name: "jarvis_cancel",
+      label: "Cancel plan",
+      description: "Cancel a waiting or unconfirmed plan by its id (shown in jarvis_status).",
+      parameters: Type.Object({ planId: Type.String() }),
+      run: async (p) => (await client.call<{ text: string }>("POST", "/cancel", { planId: p.planId })).text,
+    },
+    {
+      name: "jarvis_stop",
+      label: "Kill switch",
+      description: 'Kill switch for "stop everything": pauses Jarvis, cancels waiting plans, and (flatten=true) closes all leveraged positions.',
+      parameters: Type.Object({ flatten: Type.Boolean({ default: true }) }),
+      run: async (p) => (await client.call<{ text: string }>("POST", "/stop", { flatten: p.flatten !== false })).text,
+    },
+    {
+      name: "jarvis_limits",
+      label: "Limits",
+      description:
+        "Change the user's trading limits with key=value pairs: maxTradeUsd, maxDailyUsd, maxLeverage, maxOpenPositions, autoApproveUsd, mode (paper|live). Tightening applies at once; loosening sends the user a code. Pass an empty string to read the current limits.",
+      parameters: Type.Object({ args: Type.String({ description: 'e.g. "maxTradeUsd=2000 maxLeverage=40"' }) }),
+      run: async (p, ctx) => {
+        const args = String(p.args ?? "").trim();
+        if (!args) return (await client.call<{ text: string }>("GET", "/limits")).text;
+        return deliverOwnerCode(await client.call<OwnerResult>("POST", "/limits", { args }), ctx);
+      },
+    },
+    {
+      name: "jarvis_deposit_hyperliquid",
+      label: "Fund Hyperliquid",
+      description: "Move USDC from the user's own Arbitrum address into their own Hyperliquid account (minimum 5 USDC).",
+      parameters: Type.Object({ amountUsd: Type.Number({ minimum: 5 }) }),
+      run: async (p) => (await client.call<{ text: string }>("POST", "/deposit/hyperliquid", { amountUsd: p.amountUsd })).text,
+    },
+  ];
+}
+
+function registerTools(api: OpenClawPluginApi, client: EngineClient) {
+  for (const spec of toolSpecs(client)) {
+    api.registerTool(
+      (ctx) => {
+        // Only the owner trades. Other people in a group chat never see these tools.
+        if (ctx.senderIsOwner === false) return null;
+        return {
+          name: spec.name,
+          label: spec.label,
+          description: spec.description,
+          parameters: spec.parameters,
+          async execute(_id: string, params: Record<string, unknown>) {
+            try {
+              return text(await spec.run(params ?? {}, ctx));
+            } catch (err) {
+              return text(`Jarvis error: ${(err as Error).message}`);
+            }
+          },
+        };
+      },
+      { name: spec.name },
+    );
+  }
+}
+
+/** The last code handed back when there was no private line, for /jarvis_code. Command replies never pass through the model. */
+let lastOwnerCode: { code: string; at: number } | null = null;
+
+function ownerReply(res: OwnerResult): string {
+  if (!res.ownerCode) return res.text;
+  lastOwnerCode = { code: res.ownerCode, at: Date.now() };
+  return `${res.text}\n\n🔐 Code: ${res.ownerCode} (send /ok ${res.ownerCode})`;
+}
+
+function registerCommands(api: OpenClawPluginApi, client: EngineClient) {
+  const ownerOnly = "Only the owner of this Jarvis can do that.";
+  const guard = async (isOwner: boolean | undefined, run: () => Promise<string>) => {
+    if (isOwner !== true) return { text: ownerOnly };
+    try {
+      return { text: await run() };
+    } catch (err) {
+      return { text: `Jarvis error: ${(err as Error).message}` };
+    }
+  };
+
+  api.registerCommand({
+    name: "ok",
+    description: "Approve a Jarvis plan or settings change with the code Jarvis sent you.",
+    acceptsArgs: true,
+    requireAuth: true,
+    exposeSenderIsOwner: true,
+    handler: (ctx) =>
+      guard(ctx.senderIsOwner, async () => {
+        const code = (ctx.args ?? "").trim();
+        if (!code) return "Send /ok followed by the code.";
+        return (await client.call<{ text: string }>("POST", "/approve", { code })).text;
+      }),
+  });
+
+  api.registerCommand({
+    name: "stop",
+    description: "Kill switch: pause Jarvis and close leveraged positions. /stop keep pauses without closing.",
+    acceptsArgs: true,
+    requireAuth: true,
+    exposeSenderIsOwner: true,
+    handler: (ctx) =>
+      guard(ctx.senderIsOwner, async () => {
+        const flatten = (ctx.args ?? "").trim().toLowerCase() !== "keep";
+        return (await client.call<{ text: string }>("POST", "/stop", { flatten })).text;
+      }),
+  });
+
+  api.registerCommand({
+    name: "resume",
+    description: "Turn Jarvis back on after /stop.",
+    requireAuth: true,
+    exposeSenderIsOwner: true,
+    handler: (ctx) => guard(ctx.senderIsOwner, async () => ownerReply(await client.call<OwnerResult>("POST", "/resume"))),
+  });
+
+  api.registerCommand({
+    name: "limits",
+    description: "Show or change Jarvis limits, e.g. /limits maxTradeUsd=2000 maxLeverage=40 mode=live",
+    acceptsArgs: true,
+    requireAuth: true,
+    exposeSenderIsOwner: true,
+    handler: (ctx) =>
+      guard(ctx.senderIsOwner, async () => {
+        const args = (ctx.args ?? "").trim();
+        if (!args) return (await client.call<{ text: string }>("GET", "/limits")).text;
+        return ownerReply(await client.call<OwnerResult>("POST", "/limits", { args }));
+      }),
+  });
+
+  api.registerCommand({
+    name: "positions",
+    description: "Jarvis positions and watched conditions.",
+    requireAuth: true,
+    exposeSenderIsOwner: true,
+    handler: (ctx) => guard(ctx.senderIsOwner, async () => (await client.call<{ text: string }>("GET", "/status")).text),
+  });
+
+  api.registerCommand({
+    name: "wallet",
+    description: "Jarvis wallet addresses and how to fund them.",
+    requireAuth: true,
+    exposeSenderIsOwner: true,
+    handler: (ctx) => guard(ctx.senderIsOwner, async () => (await client.call<{ text: string }>("GET", "/wallet")).text),
+  });
+
+  api.registerCommand({
+    name: "jarvis_code",
+    description: "Show the latest Jarvis approval code when no private channel is configured.",
+    requireAuth: true,
+    exposeSenderIsOwner: true,
+    handler: (ctx) =>
+      guard(ctx.senderIsOwner, async () => {
+        if (!lastOwnerCode || Date.now() - lastOwnerCode.at > 10 * 60_000) return "No recent code.";
+        return `🔐 Code: ${lastOwnerCode.code} (send /ok ${lastOwnerCode.code})`;
+      }),
+  });
+}
+
+export default definePluginEntry({
+  id: "jarvis",
+  name: "Jarvis",
+  description: "Trade perps, spot and more from chat. Keys stay in the local Jarvis engine.",
+  register(api) {
+    const cfg = (api.pluginConfig ?? {}) as { apiUrl?: string; tokenFile?: string };
+    const client = new EngineClient({
+      ...(cfg.apiUrl ? { apiUrl: cfg.apiUrl } : {}),
+      ...(cfg.tokenFile ? { tokenFile: cfg.tokenFile } : {}),
+    });
+    registerTools(api, client);
+    const mode = api.registrationMode;
+    if (mode !== "cli-metadata" && mode !== "setup-only" && mode !== "tool-discovery") registerCommands(api, client);
+  },
+});

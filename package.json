@@ -1,0 +1,25 @@
+{
+  "name": "jarvis",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/core",
+    "packages/signer",
+    "packages/engine",
+    "packages/openclaw-plugin"
+  ],
+  "engines": {
+    "node": ">=24.16"
+  },
+  "scripts": {
+    "build": "tsc -b packages/core packages/signer packages/engine packages/openclaw-plugin",
+    "typecheck": "npm run build",
+    "test": "vitest run",
+    "clean": "rm -rf packages/*/dist packages/*/tsconfig.tsbuildinfo"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "id": "jarvis",
+  "name": "Jarvis",
+  "description": "Trade perps, spot and more from chat. Keys stay in the local Jarvis engine, never in the agent.",
+  "categories": ["finance-payments"],
+  "skills": ["./skills"],
+  "contracts": {
+    "tools": [
+      "jarvis_wallet",
+      "jarvis_markets",
+      "jarvis_trade",
+      "jarvis_status",
+      "jarvis_cancel",
+      "jarvis_stop",
+      "jarvis_limits",
+      "jarvis_deposit_hyperliquid"
+    ]
+  },
+  "activation": {
+    "onStartup": true
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "apiUrl": {
+        "type": "string",
+        "description": "Jarvis engine URL. Default http://127.0.0.1:7420"
+      },
+      "tokenFile": {
+        "type": "string",
+        "description": "Path to the engine API token. Default ~/.jarvis/api-token"
+      }
+    }
+  }
+}
