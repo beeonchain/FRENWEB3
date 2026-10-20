@@ -7,7 +7,7 @@ import type { Store } from "../store.js";
 import { curveUsdPrice, pumpFunNotes, type PumpCurve, type PumpFunApi } from "./pumpfun.js";
 import { VenueError, type ExecContext, type ExecResult, type PositionView, type SpotVenueAdapter } from "./types.js";
 
-export const USDC_MINT = "EPjFWdd5AufqSNqeM2qUv8BZ3vVdXzaa9Sr8ZnxsHMwv";
+export const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 export const SOL_MINT = "So11111111111111111111111111111111111111112";
 
 export interface TokenInfo {

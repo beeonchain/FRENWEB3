@@ -267,7 +267,7 @@ export class FakeVenues {
       const inMint = url.searchParams.get("inputMint")!;
       const outMint = url.searchParams.get("outputMint")!;
       const amount = Number(url.searchParams.get("amount"));
-      const tok = (m: string) => (m === "EPjFWdd5AufqSNqeM2qUv8BZ3vVdXzaa9Sr8ZnxsHMwv" ? { usdPrice: 1, decimals: 6 } : this.tokens.find((t) => t.id === m));
+      const tok = (m: string) => (m === "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" ? { usdPrice: 1, decimals: 6 } : this.tokens.find((t) => t.id === m));
       const a = tok(inMint);
       const b = tok(outMint);
       if (!a || !b || this.jupUnroutable.has(inMint) || this.jupUnroutable.has(outMint)) {
