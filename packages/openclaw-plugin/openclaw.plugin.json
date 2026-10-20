@@ -15,7 +15,8 @@
       "fren_limits",
       "fren_deposit_hyperliquid",
       "fren_bet_quote",
-      "fren_fund"
+      "fren_fund",
+      "fren_yield"
     ]
   },
   "activation": {

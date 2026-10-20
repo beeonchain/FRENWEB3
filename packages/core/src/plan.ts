@@ -8,7 +8,7 @@ import { z } from "zod";
 
 export const PLAN_VERSION = 1 as const;
 
-export const Venue = z.enum(["hyperliquid", "jupiter", "relay", "derive", "polymarket"]);
+export const Venue = z.enum(["hyperliquid", "jupiter", "relay", "derive", "polymarket", "yield"]);
 export type Venue = z.infer<typeof Venue>;
 
 /** Chains a token can live on. Solana tokens trade through Jupiter, EVM tokens through Relay. */
@@ -121,7 +121,27 @@ export const PredictionLeg = z.object({
 });
 export type PredictionLeg = z.infer<typeof PredictionLeg>;
 
-export const Leg = z.discriminatedUnion("kind", [PerpOpenLeg, PerpCloseLeg, SwapLeg, OptionLeg, PredictionLeg]);
+/** Where Fren can lend USDC out for interest. */
+export const YieldProtocol = z.enum(["jupiter_lend", "kamino", "aave_arbitrum", "aave_base"]);
+export type YieldProtocol = z.infer<typeof YieldProtocol>;
+
+/**
+ * Lend the owner's USDC for interest, or take it back. Deposits stay the
+ * owner's: they come back with a withdraw, to the same wallet.
+ */
+export const EarnLeg = z.object({
+  kind: z.literal("earn"),
+  venue: z.literal("yield"),
+  action: z.enum(["deposit", "withdraw"]),
+  /** Omit for the best current rate (deposits) or wherever the money is (withdrawals). */
+  protocol: YieldProtocol.optional().describe(
+    'Omit to use the best rate on a deposit, or to take from wherever the money is on a withdraw. Name one only if the owner did, or to follow fren_yield.',
+  ),
+  amount: SwapAmount.describe('{type:"usd"} for an amount, or {type:"fraction"}: of the wallet\'s USDC on a deposit, of what is lent out on a withdraw.'),
+});
+export type EarnLeg = z.infer<typeof EarnLeg>;
+
+export const Leg = z.discriminatedUnion("kind", [PerpOpenLeg, PerpCloseLeg, SwapLeg, OptionLeg, PredictionLeg, EarnLeg]);
 export type Leg = z.infer<typeof Leg>;
 
 export const Comparator = z.enum([">", ">=", "<", "<="]);

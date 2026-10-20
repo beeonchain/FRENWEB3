@@ -103,6 +103,8 @@ export interface RelayVenueOptions {
   waitForTx?: (chain: EvmChain, hash: `0x${string}`) => Promise<void>;
   /** How long to wait for Relay to fill, in ms. */
   fillTimeoutMs?: number;
+  /** Injected for tests; defaults to an eth_call through viem. */
+  evmRead?: (chain: EvmChain, call: { address: `0x${string}`; data: `0x${string}` }) => Promise<`0x${string}`>;
 }
 
 /** A paper holding key that can't collide with a Solana mint. */
@@ -147,6 +149,31 @@ export class RelayVenue implements SpotVenueAdapter {
     if (this.o.waitForTx) return this.o.waitForTx(chain, hash);
     const r = await this.client(chain).waitForTransactionReceipt({ hash, timeout: 120_000 });
     if (r.status !== "success") throw new VenueError(`Transaction reverted on ${chainName[chain]}: ${hash}`);
+  }
+
+  // -- plain EVM access, shared with Aave ----------------------------------
+
+  ownerAddress(): Promise<`0x${string}`> {
+    return this.owner();
+  }
+
+  tokenBalance(chain: EvmChain, token: `0x${string}`, owner: `0x${string}`): Promise<bigint> {
+    return this.balanceOf(chain, token, owner);
+  }
+
+  /** A read-only contract call; returns the raw return data. */
+  async call(chain: EvmChain, address: `0x${string}`, data: `0x${string}`): Promise<`0x${string}`> {
+    if (this.o.evmRead) return this.o.evmRead(chain, { address, data });
+    const res = await this.client(chain).call({ to: address, data });
+    if (!res.data) throw new VenueError(`Empty result from ${address} on ${chainName[chain]}.`);
+    return res.data;
+  }
+
+  /** Sign (the signer checks it), send, and wait for one transaction. Returns an explorer link. */
+  async sendTx(chain: EvmChain, to: `0x${string}`, data: `0x${string}`): Promise<string> {
+    const { txHash } = await this.signer().evmSendTransaction({ chainId: this.chain(chain).id, to, data });
+    await this.waitForTx(chain, txHash);
+    return `${this.chain(chain).explorer}${txHash}`;
   }
 
   // -- tokens --------------------------------------------------------------

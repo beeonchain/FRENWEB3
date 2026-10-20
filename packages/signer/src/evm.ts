@@ -36,6 +36,42 @@ export const RELAY_CONTRACTS = new Set([
   "0x4cd00e387622c35bddb9b4c962c136462338bc31", // depository (Base)
 ]);
 
+/**
+ * Aave v3 pools Fren lends USDC through, by chain id, with the one asset each
+ * may be used for. Lower-case. Calls to a pool must be supply on the owner's
+ * behalf or withdraw to the owner (checked below).
+ */
+export const AAVE_POOLS: Record<number, { pool: string; usdc: string }> = {
+  42161: { pool: "0x794a61358d6845594f94dc1db02a252b5b4814ad", usdc: "0xaf88d065e77c8cc2239327c5edb3a432268e5831" },
+  8453: { pool: "0xa238dd80c259a72e81d7e4664a9801593f98d1c5", usdc: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" },
+};
+
+const AAVE_POOL = [
+  {
+    type: "function",
+    name: "supply",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "asset", type: "address" },
+      { name: "amount", type: "uint256" },
+      { name: "onBehalfOf", type: "address" },
+      { name: "referralCode", type: "uint16" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "withdraw",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "asset", type: "address" },
+      { name: "amount", type: "uint256" },
+      { name: "to", type: "address" },
+    ],
+    outputs: [{ type: "uint256" }],
+  },
+] as const;
+
 const ERC20_APPROVE = [
   {
     type: "function",
@@ -63,9 +99,13 @@ export interface EvmTxRequest {
   gas?: string;
 }
 
-export type EvmTxKind = "relay" | "approve";
+export type EvmTxKind = "relay" | "approve" | "aave";
 
-export function checkEvmTransaction(req: EvmTxRequest): { kind: EvmTxKind; spender?: string } {
+/**
+ * `owner` is the wallet sending: Aave calls must name it as the beneficiary.
+ * Without it, Aave calls are refused.
+ */
+export function checkEvmTransaction(req: EvmTxRequest, owner?: string): { kind: EvmTxKind; spender?: string } {
   if (!EVM_CHAINS[req.chainId]) throw new SignerRuleError(`Chain ${req.chainId} is not one the signer sends on.`);
   if (req.value !== undefined && BigInt(req.value) !== 0n) {
     throw new SignerRuleError("EVM transactions from Fren never send ETH.");
@@ -74,9 +114,24 @@ export function checkEvmTransaction(req: EvmTxRequest): { kind: EvmTxKind; spend
   if (req.data.slice(0, 10).toLowerCase() === APPROVE_SELECTOR) {
     const { args } = decodeFunctionData({ abi: ERC20_APPROVE, data: req.data });
     const [spender, amount] = args;
-    if (!RELAY_CONTRACTS.has(spender.toLowerCase())) throw new SignerRuleError(`Approval for ${spender}, which is not on the signer's allow list.`);
+    const aave = AAVE_POOLS[req.chainId];
+    const toAave = aave !== undefined && spender.toLowerCase() === aave.pool;
+    if (!RELAY_CONTRACTS.has(spender.toLowerCase()) && !toAave) throw new SignerRuleError(`Approval for ${spender}, which is not on the signer's allow list.`);
+    if (toAave && to !== aave.usdc) throw new SignerRuleError("Aave approvals are for USDC only.");
     if (amount > MAX_APPROVAL_RAW) throw new SignerRuleError("Unlimited token approvals are not allowed.");
     return { kind: "approve", spender };
+  }
+  const aave = AAVE_POOLS[req.chainId];
+  if (aave && to === aave.pool) {
+    if (!owner) throw new SignerRuleError("Aave calls need the sending wallet to check against.");
+    const { functionName, args } = decodeFunctionData({ abi: AAVE_POOL, data: req.data });
+    if (args[0].toLowerCase() !== aave.usdc) throw new SignerRuleError("Fren only lends USDC on Aave.");
+    // supply(asset, amount, onBehalfOf, …) and withdraw(asset, amount, to): the third argument is who gets it.
+    const beneficiary = args[2];
+    if (beneficiary.toLowerCase() !== owner.toLowerCase()) {
+      throw new SignerRuleError(`Aave ${functionName} must ${functionName === "supply" ? "credit" : "pay"} the wallet itself, not ${beneficiary}.`);
+    }
+    return { kind: "aave" };
   }
   if (!RELAY_CONTRACTS.has(to)) throw new SignerRuleError(`Contract ${req.to} is not on the signer's allow list.`);
   return { kind: "relay" };
@@ -87,7 +142,7 @@ export async function sendEvmTransaction(
   req: EvmTxRequest,
   rpcOverrides: Record<number, string> = {},
 ): Promise<`0x${string}`> {
-  checkEvmTransaction(req);
+  checkEvmTransaction(req, account.address);
   const net = EVM_CHAINS[req.chainId]!;
   const client = createWalletClient({ account, chain: net.chain, transport: http(rpcOverrides[req.chainId] ?? net.rpc) });
   return client.sendTransaction({

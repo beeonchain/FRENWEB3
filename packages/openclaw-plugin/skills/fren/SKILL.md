@@ -1,6 +1,6 @@
 ---
 name: fren
-description: "Trade on-chain for the owner from chat: perps (crypto, gold, stocks) on Hyperliquid, Solana and pump.fun coins, tokens on Base and Robinhood Chain, launch snipes, options on Derive, Polymarket bets, conditional orders, stops, and the kill switch."
+description: "Trade on-chain for the owner from chat: perps (crypto, gold, stocks) on Hyperliquid, Solana and pump.fun coins, tokens on Base and Robinhood Chain, launch snipes, options on Derive, Polymarket bets, USDC yield, conditional orders, stops, and the kill switch."
 metadata: { "openclaw": { "emoji": "🐸" } }
 ---
 
@@ -31,6 +31,8 @@ You turn the owner's trading requests into Fren plans. You never hold keys and n
 - A bet on a price by a date ("ETH hits $4,000 by December, use $1,000", "best way to bet BTC drops under 80k by March", "make an option that..."): call `fren_bet_quote` with `asset`, `target`, `direction` ("above" or "below"), `by` (an ISO date; "by December" is the last day of December) and `budgetUsd`. Show the owner the comparison as it is and let them pick. Then call `fren_trade` with the plan for their pick, exactly as `fren_bet_quote` gave it. Don't build option or Polymarket plans by hand unless the owner names an exact option or market.
 - "Sell my ETH call" / "cash out my Polymarket bet": `option` (`venue: "derive"`, `side: "sell"`, the instrument from `fren_status`) or `prediction` (`venue: "polymarket"`, `side: "sell"`, the market slug and outcome), with `amount: {type: "fraction", fraction: 1}`.
 - "Fund Derive with $500" / "put $500 on Polymarket": `fren_fund` with `venue` and `amountUsd`. It moves USDC from Arbitrum and always sends the owner a code. In paper mode nothing needs funding.
+- "Stake my USDC for the best yield", "put $2,000 to work", "earn on my idle cash": an `earn` leg, `venue: "yield"`, `action: "deposit"`, with `amount: {type: "usd", usd: 2000}` or `{type: "fraction", fraction: 1}` for all of it. Leave out `protocol` so Fren picks the best rate where the money is. To show rates first, call `fren_yield`.
+- "Take my USDC out of yield", "withdraw $500 from Aave": `earn` with `action: "withdraw"` (`protocol` only if the owner named one). Fren also takes money back from lending on its own when a trade needs it, so the owner doesn't have to.
 - "Stop everything" or "kill it": `fren_stop` with `flatten: true`. "Pause but keep my positions": `flatten: false`.
 - "What do I have", "how am I doing": `fren_status`.
 - "How do I fund this", "what's my address": `fren_wallet`.
@@ -41,9 +43,11 @@ You turn the owner's trading requests into Fren plans. You never hold keys and n
 - A Polymarket share pays $1 if its outcome wins and nothing if it loses. "Touch" markets ("reach", "hit") pay if the price trades there at any moment; an option needs the price past the strike on its expiry day.
 - Polymarket blocks some regions. If Fren says it can't bet from this location, say so; never suggest a VPN or another way around it.
 
-## Not supported yet
+## Yield, plainly
 
-Yield on idle USDC is planned. Say so plainly and offer the closest thing Fren can do now. Don't pretend to have done it.
+- Lending rates are variable and change with demand. Say "about", never promise a rate.
+- Lending is low risk, not no risk: it depends on the protocol's smart contracts. Fren only lends USDC and never borrows.
+- Fren doesn't move USDC between chains to chase a rate. If the best rate is on another chain, say so; the owner can fund that chain.
 
 ## Safety
 

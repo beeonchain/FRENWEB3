@@ -15,6 +15,12 @@ export interface ResolvedStep {
   spendUsd: number;
   /** Full position size for perps, equal to spendUsd for swaps. */
   notionalUsd: number;
+  /**
+   * USD moved between the owner's own accounts, such as a yield deposit. Not a
+   * spend (it doesn't count toward the caps), but over the auto-approve level
+   * it still needs the owner's code.
+   */
+  movesUsd?: number;
   /** Venue's own leverage cap for this market, when it has one. */
   venueMaxLeverage?: number;
   /** False when a token could not be matched to a verified list. */
@@ -118,6 +124,7 @@ export function evaluatePolicy(
     spendTotal += r.spendUsd;
 
     if (r.spendUsd > limits.autoApproveUsd) needsConfirm = true;
+    if ((r.movesUsd ?? 0) > limits.autoApproveUsd) needsConfirm = true;
 
     const verdict: Verdict = reasons.length > 0 ? "reject" : needsConfirm ? "confirm" : "execute";
     return { index: r.index, verdict, reasons, warnings };

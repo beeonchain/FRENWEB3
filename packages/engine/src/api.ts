@@ -21,6 +21,7 @@ export function createApi(fren: Fren, token: string): Server {
     "GET /wallet": async () => fren.wallet(),
     "GET /status": async () => ({ text: await fren.status() }),
     "GET /markets": async (_b, url) => ({ text: await fren.searchMarkets(url.searchParams.get("q") ?? "") }),
+    "GET /yield": async () => ({ text: await fren.yieldRates() }),
     "GET /limits": async () => ({ limits: fren.limits(), text: describeLimits(fren.limits()) }),
     "GET /events": async (_b, url) => ({ events: fren.recentEvents(Number(url.searchParams.get("since") ?? 0)) }),
     "POST /plans": async (b) => fren.submit(b.plan),
