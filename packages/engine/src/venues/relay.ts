@@ -256,6 +256,39 @@ export class RelayVenue implements SpotVenueAdapter {
     );
   }
 
+  /**
+   * Bridge USDC from Arbitrum (or Base) to an address on another chain: how
+   * Fren funds Derive (USDC on Ethereum) and Polymarket (pUSD on Polygon).
+   */
+  async bridgeUsdc(req: { toChainId: number; toCurrency: string; recipient: string; usd: number; where: string }): Promise<string> {
+    const owner = await this.owner();
+    const need = BigInt(Math.round(req.usd * 1e6));
+    const origin = await this.fundingChain(owner, "arbitrum", need);
+    const quote = await postJson<RelayQuote>(
+      this.o.fetchFn,
+      `${this.o.apiUrl}/quote/v2`,
+      {
+        user: owner,
+        recipient: req.recipient,
+        refundTo: owner,
+        originChainId: this.chain(origin).id,
+        destinationChainId: req.toChainId,
+        originCurrency: this.chain(origin).usdc,
+        destinationCurrency: req.toCurrency,
+        amount: need.toString(),
+        tradeType: "EXACT_INPUT",
+        slippageTolerance: "50",
+      },
+      this.headers(),
+    ).catch((err: unknown) => {
+      throw new VenueError(`Relay can't route USDC to ${req.where} right now: ${(err as Error).message}`);
+    });
+    const hashes = await this.runSteps(quote, origin, owner, need);
+    const got = Number(quote.details?.currencyOut?.amount ?? 0) / 1e6;
+    const link = hashes.at(-1) ? ` ${this.chain(origin).explorer}${hashes.at(-1)}` : "";
+    return `✅ Sent ${fmtUsd(req.usd)} USDC from ${chainName[origin]} to ${req.where}${got ? ` (about ${fmtUsd(got)} arrives after fees)` : ""}.${link}`;
+  }
+
   /** True once Relay can route USDC into the token: the snipe trigger for EVM launches. */
   async isTradable(token: string, chain: string): Promise<boolean> {
     const c = chain as EvmChain;

@@ -25,11 +25,14 @@ import {
   type Venue,
 } from "@fren/core";
 import type { Addresses, SignerApi } from "@fren/signer";
+import { quoteBet, type BetQuery, type BetQuote } from "./bets.js";
 import type { Notifier } from "./notify.js";
 import type { Mode, PendingKind, Store } from "./store.js";
 import type { HyperliquidVenue } from "./venues/hyperliquid.js";
 import type { JupiterVenue } from "./venues/jupiter.js";
 import type { RelayVenue } from "./venues/relay.js";
+import type { DeriveVenue } from "./venues/derive.js";
+import type { PolymarketVenue } from "./venues/polymarket.js";
 import { VenueError, type PositionView, type SpotVenueAdapter, type VenueAdapter } from "./venues/types.js";
 
 export interface FrenDeps {
@@ -37,6 +40,8 @@ export interface FrenDeps {
   hyperliquid: HyperliquidVenue;
   jupiter: JupiterVenue;
   relay: RelayVenue;
+  derive: DeriveVenue;
+  polymarket: PolymarketVenue;
   notifier: Notifier;
   signer: SignerApi | null;
   isTestnet: boolean;
@@ -76,7 +81,7 @@ export class Fren {
   private sniping = false;
 
   constructor(private readonly d: FrenDeps) {
-    this.venues = { hyperliquid: d.hyperliquid, jupiter: d.jupiter, relay: d.relay };
+    this.venues = { hyperliquid: d.hyperliquid, jupiter: d.jupiter, relay: d.relay, derive: d.derive, polymarket: d.polymarket };
   }
 
   private spot(venue: "jupiter" | "relay"): SpotVenueAdapter {
@@ -132,6 +137,9 @@ export class Fren {
           return { ...c, market: m.name };
         }
         if (c.venue === "relay") throw new VenueError("Price triggers on Base and Robinhood Chain tokens aren't supported yet.");
+        if (c.venue === "derive" || c.venue === "polymarket") {
+          throw new VenueError("Price triggers watch Hyperliquid markets and Solana tokens. For an option or bet, watch the underlying, e.g. ETH on Hyperliquid.");
+        }
         if (c.type === "price") return { ...c, market: (await this.d.jupiter.token(c.market)).mint };
         return c;
       }),
@@ -231,6 +239,10 @@ export class Fren {
     if (p.kind === "resume") {
       this.d.store.setLimits({ ...this.limits(), paused: false });
       return "✅ Fren is back on. The watcher is running again.";
+    }
+    if (p.kind === "fund") {
+      const { venue, usd, to } = JSON.parse(p.payload) as { venue: FundVenue; usd: number; to: string };
+      return this.runFunding(venue, usd, to).catch((err: Error) => `❌ ${err.message}`);
     }
     const rec = this.d.store.getPlan(p.payload);
     if (!rec || rec.status !== "pending_confirm") return "That plan is no longer waiting for approval.";
@@ -380,6 +392,7 @@ export class Fren {
       if (limits.paused) return;
       const snap = await this.snapshot();
       await this.paperExits(snap);
+      if (limits.mode === "paper") await this.settlePaperBets();
       await this.fireReady(snap, false);
     } finally {
       this.ticking = false;
@@ -445,11 +458,73 @@ export class Fren {
     }
   }
 
+  /** Expired paper options and resolved paper bets pay out, like the real venues do. */
+  private async settlePaperBets() {
+    const lines = [
+      ...(await this.d.derive.settlePaper().catch(() => [])),
+      ...(await this.d.polymarket.settlePaper().catch(() => [])),
+    ];
+    for (const l of lines) await this.d.notifier.alert(l);
+  }
+
+  // -- bets ------------------------------------------------------------------------
+
+  /** Quote a price-target bet both ways: an option on Derive and a Polymarket market. */
+  async quoteBet(q: BetQuery, request = ""): Promise<BetQuote> {
+    return quoteBet({ derive: this.d.derive, polymarket: this.d.polymarket }, q, request || `${q.asset} ${q.direction} ${q.target} by ${q.by} with $${q.budgetUsd}`);
+  }
+
+  /**
+   * Move USDC from Arbitrum to Derive or Polymarket. The money leaves for an
+   * address an API gave Fren, so the owner always approves it with a code.
+   */
+  async requestFunding(venue: FundVenue, usd: number): Promise<OwnerRequestResult> {
+    if (!this.d.signer) return { text: "No wallets yet. Run `fren init` first." };
+    if (this.limits().paused) return { text: "Fren is stopped. Send /resume first." };
+    if (this.limits().mode === "paper") return { text: `Paper mode trades ${FUND_NAMES[venue]} from your paper balance; nothing to fund. Switch to live first.` };
+    if (!(usd >= 10)) return { text: `Send at least $10 to ${FUND_NAMES[venue]}.` };
+    const to = await this.fundingAddress(venue);
+    return this.issueCode("fund", JSON.stringify({ venue, usd, to }), `Send ${fmtUsd(usd)} USDC from Arbitrum to your ${FUND_NAMES[venue]} account at ${to}?`);
+  }
+
+  /** Where funding for a venue goes, as that venue's API reports it. */
+  private fundingAddress(venue: FundVenue): Promise<string> {
+    return venue === "derive" ? this.d.derive.depositAddress() : this.d.polymarket.depositWallet();
+  }
+
+  private async runFunding(venue: FundVenue, usd: number, approvedTo: string): Promise<string> {
+    if (this.limits().paused) return "Fren is stopped. Send /resume first.";
+    // The owner approved one address; if the venue now reports another, stop.
+    const to = await this.fundingAddress(venue);
+    if (to.toLowerCase() !== approvedTo.toLowerCase()) {
+      return `❌ ${FUND_NAMES[venue]} now reports a different deposit address (${to}) from the one you approved (${approvedTo}). Nothing was sent.`;
+    }
+    if (venue === "derive") {
+      const { chainId, usdc } = this.d.derive.depositToken;
+      const sent = await this.d.relay.bridgeUsdc({ toChainId: chainId, toCurrency: usdc, recipient: to, usd, where: "your Derive account" });
+      return `${sent}
+Derive credits it once it lands on Ethereum, usually within a few minutes. Your first deposit opens the account.`;
+    }
+    const sent = await this.d.relay.bridgeUsdc({ toChainId: 137, toCurrency: POLYMARKET_PUSD, recipient: to, usd, where: "your Polymarket wallet" });
+    return `${sent}
+It shows up as pUSD in your Polymarket wallet ${to}.`;
+  }
+
   // -- read-only views -----------------------------------------------------------
 
   async positions(): Promise<PositionView[]> {
     const mode = this.limits().mode;
-    const all = (await Promise.all([this.d.hyperliquid.positions(mode), this.d.jupiter.positions(mode), this.d.relay.positions(mode)])).flat();
+    const all = (
+      await Promise.all(
+        [this.d.hyperliquid, this.d.jupiter, this.d.relay, this.d.derive, this.d.polymarket].map((v) =>
+          v.positions(mode).catch((err: Error) => {
+            // One venue being down shouldn't hide the others.
+            if (v === this.d.hyperliquid) throw err;
+            return [] as PositionView[];
+          }),
+        ),
+      )
+    ).flat();
     if (mode === "live") this.liveOpenPositions = all.filter((p) => p.kind === "perp").length;
     return all;
   }
@@ -512,6 +587,9 @@ export class Fren {
       `  The same address holds tokens on Base and Robinhood Chain. Buys there are paid from USDC on Arbitrum or Base, so keep about $1 of ETH for gas on whichever you fund.${evmUsdc ? ` USDC: ${evmUsdc}.` : ""}`,
       "",
       `Trading key on Hyperliquid: ${a.hlAgent} (can trade, cannot withdraw).`,
+      "",
+      `Options (Derive) and bets (Polymarket) use the same EVM address. Say "fund Derive with $500" or "fund Polymarket with $500" to move USDC there from Arbitrum.`,
+      ...(a.deriveSession ? [`Trading key on Derive: ${a.deriveSession} (option orders only, cannot withdraw).`] : []),
     ].join("\n");
     return { text, addresses: a };
   }
@@ -559,6 +637,11 @@ export class Fren {
   }
 }
 
+export type FundVenue = "derive" | "polymarket";
+const FUND_NAMES: Record<FundVenue, string> = { derive: "Derive", polymarket: "Polymarket" };
+/** Polymarket's collateral token on Polygon. */
+const POLYMARKET_PUSD = "0xC011a7E12a19f7B1f670d46F03B03f3342E82DFB";
+
 function pick(o: OwnerRequestResult) {
   return {
     ...(o.codeSentPrivately !== undefined ? { codeSentPrivately: o.codeSentPrivately } : {}),
@@ -582,5 +665,8 @@ function describePosition(p: PositionView): string {
     const liq = p.liquidationPx ? `, liq ${fmtPrice(p.liquidationPx)}` : "";
     return `${p.side} ${p.size} ${p.symbol} @ ${p.entryPx ? fmtPrice(p.entryPx) : "?"}${p.markPx ? ` (now ${fmtPrice(p.markPx)})` : ""}${pnl}${liq}`;
   }
+  const size = Number(p.size.toFixed(4));
+  if (p.venue === "derive") return `${size} contracts of the ${p.symbol} worth ${fmtUsd(p.valueUsd)}${pnl}`;
+  if (p.venue === "polymarket") return `${size} shares of ${p.symbol} worth ${fmtUsd(p.valueUsd)}${pnl}`;
   return `${p.size} ${p.symbol} worth ${fmtUsd(p.valueUsd)}${pnl}`;
 }

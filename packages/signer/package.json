@@ -18,5 +18,8 @@
     "@nktkas/hyperliquid": "^0.33.3",
     "@solana/web3.js": "^1.98.0",
     "viem": "^2.38.0"
+  },
+  "devDependencies": {
+    "@derivexyz/derive-ts": "3.0.35"
   }
 }

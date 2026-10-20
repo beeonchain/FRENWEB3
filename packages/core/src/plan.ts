@@ -8,7 +8,7 @@ import { z } from "zod";
 
 export const PLAN_VERSION = 1 as const;
 
-export const Venue = z.enum(["hyperliquid", "jupiter", "relay"]);
+export const Venue = z.enum(["hyperliquid", "jupiter", "relay", "derive", "polymarket"]);
 export type Venue = z.infer<typeof Venue>;
 
 /** Chains a token can live on. Solana tokens trade through Jupiter, EVM tokens through Relay. */
@@ -88,7 +88,40 @@ export const SwapLeg = z.object({
 });
 export type SwapLeg = z.infer<typeof SwapLeg>;
 
-export const Leg = z.discriminatedUnion("kind", [PerpOpenLeg, PerpCloseLeg, SwapLeg]);
+/**
+ * Buy an option on Derive, or sell one Fren already holds. Fren never writes
+ * (sells short) options: the most a buy can lose is the premium paid.
+ */
+export const OptionLeg = z.object({
+  kind: z.literal("option"),
+  venue: z.literal("derive"),
+  side: z.enum(["buy", "sell"]),
+  /** Derive instrument name, e.g. "ETH-20261225-4000-C". Get it from fren_bet_quote or fren_markets. */
+  instrument: z
+    .string()
+    .regex(/^[A-Z0-9]+-\d{8}-\d+(\.\d+)?-[CP]$/, 'Derive option name like "ETH-20261225-4000-C"')
+    .describe('Derive option name "<ASSET>-<YYYYMMDD expiry>-<strike>-<C|P>", from fren_bet_quote.'),
+  amount: SwapAmount.describe('Buys: {type:"usd"} is the premium to spend. Sells: {type:"fraction"} of the contracts held.'),
+  /** Pay at most this much over the best ask (or take this much under the best bid), in percent. */
+  maxSlippagePct: z.number().positive().max(25).default(5),
+});
+export type OptionLeg = z.infer<typeof OptionLeg>;
+
+/** Buy shares of a Polymarket outcome, or sell shares Fren holds. Each share pays $1 if that outcome wins. */
+export const PredictionLeg = z.object({
+  kind: z.literal("prediction"),
+  venue: z.literal("polymarket"),
+  side: z.enum(["buy", "sell"]),
+  /** Polymarket market slug (preferred) or condition id. */
+  market: z.string().min(1).describe("Polymarket market slug from fren_bet_quote or fren_markets."),
+  outcome: z.string().min(1).default("Yes").describe('Outcome to buy or sell: "Yes", "No", or the outcome name.'),
+  amount: SwapAmount.describe('Buys: {type:"usd"} to spend. Sells: {type:"fraction"} of the shares held.'),
+  /** Buys: never pay more than this per share (0 to 1). Sells: never take less. */
+  limitPrice: z.number().gt(0).lt(1).optional().describe("Buys: most to pay per share (0-1). Sells: least to accept."),
+});
+export type PredictionLeg = z.infer<typeof PredictionLeg>;
+
+export const Leg = z.discriminatedUnion("kind", [PerpOpenLeg, PerpCloseLeg, SwapLeg, OptionLeg, PredictionLeg]);
 export type Leg = z.infer<typeof Leg>;
 
 export const Comparator = z.enum([">", ">=", "<", "<="]);

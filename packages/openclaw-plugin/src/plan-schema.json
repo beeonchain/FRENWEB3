@@ -251,6 +251,168 @@
                   "token",
                   "amount"
                 ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "option"
+                  },
+                  "venue": {
+                    "type": "string",
+                    "const": "derive"
+                  },
+                  "side": {
+                    "type": "string",
+                    "enum": [
+                      "buy",
+                      "sell"
+                    ]
+                  },
+                  "instrument": {
+                    "type": "string",
+                    "pattern": "^[A-Z0-9]+-\\d{8}-\\d+(\\.\\d+)?-[CP]$",
+                    "description": "Derive option name \"<ASSET>-<YYYYMMDD expiry>-<strike>-<C|P>\", from fren_bet_quote."
+                  },
+                  "amount": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "usd"
+                          },
+                          "usd": {
+                            "type": "number",
+                            "exclusiveMinimum": 0
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "usd"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "fraction"
+                          },
+                          "fraction": {
+                            "type": "number",
+                            "exclusiveMinimum": 0,
+                            "maximum": 1
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "fraction"
+                        ]
+                      }
+                    ],
+                    "description": "Buys: {type:\"usd\"} is the premium to spend. Sells: {type:\"fraction\"} of the contracts held."
+                  },
+                  "maxSlippagePct": {
+                    "default": 5,
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 25
+                  }
+                },
+                "required": [
+                  "kind",
+                  "venue",
+                  "side",
+                  "instrument",
+                  "amount"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "prediction"
+                  },
+                  "venue": {
+                    "type": "string",
+                    "const": "polymarket"
+                  },
+                  "side": {
+                    "type": "string",
+                    "enum": [
+                      "buy",
+                      "sell"
+                    ]
+                  },
+                  "market": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Polymarket market slug from fren_bet_quote or fren_markets."
+                  },
+                  "outcome": {
+                    "default": "Yes",
+                    "description": "Outcome to buy or sell: \"Yes\", \"No\", or the outcome name.",
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "amount": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "usd"
+                          },
+                          "usd": {
+                            "type": "number",
+                            "exclusiveMinimum": 0
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "usd"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "fraction"
+                          },
+                          "fraction": {
+                            "type": "number",
+                            "exclusiveMinimum": 0,
+                            "maximum": 1
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "fraction"
+                        ]
+                      }
+                    ],
+                    "description": "Buys: {type:\"usd\"} to spend. Sells: {type:\"fraction\"} of the shares held."
+                  },
+                  "limitPrice": {
+                    "description": "Buys: most to pay per share (0-1). Sells: least to accept.",
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "exclusiveMaximum": 1
+                  }
+                },
+                "required": [
+                  "kind",
+                  "venue",
+                  "side",
+                  "market",
+                  "amount"
+                ]
               }
             ]
           },
@@ -273,7 +435,9 @@
                       "enum": [
                         "hyperliquid",
                         "jupiter",
-                        "relay"
+                        "relay",
+                        "derive",
+                        "polymarket"
                       ]
                     },
                     "market": {

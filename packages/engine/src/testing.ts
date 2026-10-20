@@ -7,6 +7,16 @@ import { HyperliquidVenue } from "./venues/hyperliquid.js";
 import { JupiterVenue } from "./venues/jupiter.js";
 import type { PumpCurve, PumpFunApi, PumpTrade } from "./venues/pumpfun.js";
 import { RelayVenue } from "./venues/relay.js";
+import { DeriveVenue, type DeriveInstrument, type DeriveTicker } from "./venues/derive.js";
+import {
+  PolymarketVenue,
+  type PolyBook,
+  type PolyFill,
+  type PolyLivePosition,
+  type PolyMarket,
+  type PolymarketData,
+  type PolymarketTrader,
+} from "./venues/polymarket.js";
 
 /**
  * A fake of the Hyperliquid and Jupiter HTTP APIs, good enough to drive the
@@ -44,6 +54,32 @@ export const RELAY_APPROVAL_PROXY = "0xccc88a9d1b4ed6b0eaba998850414b24f1c315be"
 export const RELAY_ROUTER = "0xb92fe925dc43a0ecde6c8b1a2709c170ec4fff4f";
 export const BASE_DOG = "0x1111111111111111111111111111111111111111";
 export const RH_FROG = "0x2222222222222222222222222222222222222222";
+
+/** A Derive option name expiring a number of days from now, e.g. "ETH-20261225-4000-C". */
+export function optionName(asset: string, daysOut: number, strike: number, type: "C" | "P" = "C", now = Date.now()): string {
+  const d = new Date(now + daysOut * 86_400_000);
+  const ymd = `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`;
+  return `${asset}-${ymd}-${strike}-${type}`;
+}
+
+function fakeInstrument(name: string): DeriveInstrument {
+  const [, ymd, strike, type] = name.split("-") as [string, string, string, string];
+  const expiry = Date.UTC(Number(ymd.slice(0, 4)), Number(ymd.slice(4, 6)) - 1, Number(ymd.slice(6, 8)), 8) / 1000;
+  return {
+    instrument_name: name,
+    is_active: true,
+    base_asset_address: "0x4BB4C3CDc7562f08e9910A0C7D8bB7e108861eB4",
+    base_asset_sub_id: "39614081257132168796771975168",
+    amount_step: "0.01",
+    minimum_amount: "0.01",
+    tick_size: "0.1",
+    taker_fee_rate: "0.0003",
+    base_fee: "0.5",
+    mark_price_fee_rate_cap: "0.125",
+    risk_universe_id: 1,
+    option_details: { expiry, strike, option_type: type, index: "ETH-USD", settlement_price: null },
+  };
+}
 
 export class FakeVenues {
   main: FakeMarket[] = [
@@ -103,6 +139,68 @@ export class FakeVenues {
     return { filled: { totalSz: orders[0]!.s, avgPx: orders[0]!.p, oid: 42 } };
   };
 
+  /** Derive: listed options and their tickers, by name. */
+  deriveTickers = new Map<string, DeriveTicker>();
+  deriveInstruments = new Map<string, DeriveInstrument>();
+  /** Subaccounts the fake Derive account has (empty until funded). */
+  deriveSubaccounts: number[] = [];
+  derivePositions: { instrument_name: string; amount: string }[] = [];
+  /** Every Derive call: method and body, with the auth headers it carried. */
+  deriveCalls: { method: string; body: Record<string, unknown>; headers: Record<string, string> }[] = [];
+  /** How much of an order the fake Derive fills (1 = all). */
+  deriveFillRatio = 1;
+
+  addOption(name: string, quote: { ask: number; bid: number; spot: number }) {
+    this.deriveInstruments.set(name, fakeInstrument(name));
+    this.deriveTickers.set(name, { a: String(quote.ask), b: String(quote.bid), A: "100", B: "100", M: String((quote.ask + quote.bid) / 2), I: String(quote.spot) });
+  }
+
+  settleOption(name: string, price: number) {
+    const i = this.deriveInstruments.get(name);
+    if (!i?.option_details) throw new Error(`no fake option ${name}`);
+    i.option_details.settlement_price = String(price);
+  }
+
+  private derive(method: string, body: Record<string, unknown>, headers: Record<string, string>): unknown {
+    this.deriveCalls.push({ method, body, headers });
+    const ok = (result: unknown) => ({ result });
+    const err = (message: string) => ({ error: { code: -32000, message } });
+    const authed = () => Boolean(headers["X-DeriveWallet"] && headers["X-DeriveSignature"]);
+    switch (method) {
+      case "public/get_all_instruments":
+        return ok({ instruments: [...this.deriveInstruments.values()].filter((i) => i.instrument_name.startsWith(`${String(body.currency)}-`)) });
+      case "public/get_instrument": {
+        const i = this.deriveInstruments.get(String(body.instrument_name));
+        return i ? ok(i) : err("Instrument not found");
+      }
+      case "public/get_ticker": {
+        const t = this.deriveTickers.get(String(body.instrument_name));
+        return t ? ok(t) : err("Instrument not found");
+      }
+      case "public/get_risk_universes":
+        return ok([{ risk_universe_id: 1, managers: [{ manager_id: 7, margin_type: "SM", collaterals: [{ name: "USDC" }] }] }]);
+      case "public/register_deposit_address":
+        return ok({ deposit_address: "0xde9051700000000000000000000000000000beef" });
+      case "private/set_session_key":
+        return this.deriveSubaccounts.length ? ok({ ok: true }) : err("Account not found");
+      case "private/get_subaccounts":
+        return authed() ? ok({ subaccount_ids: this.deriveSubaccounts }) : err("Unauthorized");
+      case "private/get_positions":
+        return authed() ? ok({ positions: this.derivePositions.map((p) => ({ ...p, instrument_type: "option", average_price: "100", mark_price: "100", mark_value: "100", unrealized_pnl: "0" })) }) : err("Unauthorized");
+      case "private/order": {
+        if (!authed()) return err("Unauthorized");
+        const filled = Number((Number(body.amount) * this.deriveFillRatio).toFixed(2));
+        const t = this.deriveTickers.get(String(body.instrument_name))!;
+        const px = Number(body.direction === "buy" ? t.a : t.b);
+        return ok({
+          order: { order_id: "ord-1", filled_amount: String(filled), average_price: String(px), order_fee: "1.5", order_status: filled > 0 ? "filled" : "cancelled" },
+          trades: filled > 0 ? [{ trade_id: "t-1" }] : [],
+        });
+      }
+    }
+    return err(`fake: no Derive method ${method}`);
+  }
+
   setMid(name: string, mid: number) {
     const m = [...this.main, ...Object.values(this.builder).flat()].find((x) => x.name === name);
     if (!m) throw new Error(`no fake market ${name}`);
@@ -136,6 +234,11 @@ export class FakeVenues {
     const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {};
     const json = (v: unknown, status = 200) => new Response(JSON.stringify(v), { status, headers: { "content-type": "application/json" } });
 
+    if (url.hostname === "derive.test") {
+      const h = new Headers(init?.headers);
+      const headers = Object.fromEntries(["X-DeriveWallet", "X-DeriveTimestamp", "X-DeriveSignature"].flatMap((k) => (h.get(k) ? [[k, h.get(k)!]] : [])));
+      return json(this.derive(url.pathname.slice(1), body, headers));
+    }
     if (url.pathname === "/info") {
       if (body.type === "perpDexs") return json([null, ...Object.keys(this.builder).map((name) => ({ name, fullName: name }))]);
       if (body.type === "metaAndAssetCtxs") {
@@ -233,14 +336,103 @@ export class FakePumpFun implements PumpFunApi {
   }
 }
 
+/** Polymarket markets and order books, in memory. */
+export class FakePolymarketData implements PolymarketData {
+  markets: PolyMarket[] = [];
+  books = new Map<string, PolyBook>();
+  searches: string[] = [];
+
+  addMarket(m: Omit<PolyMarket, "closed" | "acceptingOrders" | "resolved" | "outcomes"> & { yesAsk: number; yesId?: string; noId?: string; depthUsd?: number }) {
+    const yesId = m.yesId ?? `${m.slug}-yes`;
+    const noId = m.noId ?? `${m.slug}-no`;
+    const depth = m.depthUsd ?? 100_000;
+    this.markets.push({
+      slug: m.slug,
+      question: m.question,
+      endDate: m.endDate,
+      closed: false,
+      acceptingOrders: true,
+      resolved: false,
+      outcomes: [
+        { label: "Yes", assetId: yesId, price: m.yesAsk },
+        { label: "No", assetId: noId, price: 1 - m.yesAsk },
+      ],
+    });
+    const book = (ask: number): PolyBook => ({
+      asks: [{ price: ask, size: depth / 2 / ask }, { price: Number((ask + 0.02).toFixed(2)), size: depth / 2 / ask }],
+      bids: [{ price: Number((ask - 0.01).toFixed(2)), size: depth / ask }],
+      minOrderSize: 5,
+    });
+    this.books.set(yesId, book(m.yesAsk));
+    this.books.set(noId, book(Number((1 - m.yesAsk + 0.01).toFixed(2))));
+  }
+
+  resolve(slug: string, winner: "Yes" | "No") {
+    const m = this.markets.find((x) => x.slug === slug)!;
+    m.closed = true;
+    m.acceptingOrders = false;
+    m.resolved = true;
+    for (const o of m.outcomes) o.price = o.label === winner ? 1 : 0;
+  }
+
+  async search(query: string) {
+    this.searches.push(query);
+    const words = query.toLowerCase().split(/\s+/);
+    return this.markets.filter((m) => words.some((w) => m.question.toLowerCase().includes(w)));
+  }
+  async market(slug: string) {
+    return this.markets.find((m) => m.slug === slug) ?? null;
+  }
+  async book(assetId: string) {
+    const b = this.books.get(assetId);
+    if (!b) throw new Error(`no book for ${assetId}`);
+    return b;
+  }
+}
+
+/** A live Polymarket account that fills at the book's best price. */
+export class FakePolymarketTrader implements PolymarketTrader {
+  orders: { side: "buy" | "sell"; assetId: string; usd?: number; shares?: number; limit: number }[] = [];
+  held = new Map<string, number>();
+  closedOnlyMode = false;
+
+  constructor(private readonly data: FakePolymarketData) {}
+
+  async wallet() {
+    return "0x9011000000000000000000000000000000000001";
+  }
+  async closedOnly() {
+    return this.closedOnlyMode;
+  }
+  async buy(req: { assetId: string; usd: number; maxPrice: number }): Promise<PolyFill> {
+    this.orders.push({ side: "buy", assetId: req.assetId, usd: req.usd, limit: req.maxPrice });
+    const px = (await this.data.book(req.assetId)).asks[0]!.price;
+    if (px > req.maxPrice) return { shares: 0, usd: 0, txs: [] };
+    const shares = req.usd / px;
+    this.held.set(req.assetId, (this.held.get(req.assetId) ?? 0) + shares);
+    return { shares, usd: req.usd, txs: ["0xpolytx"] };
+  }
+  async sell(req: { assetId: string; shares: number; minPrice: number }): Promise<PolyFill> {
+    this.orders.push({ side: "sell", assetId: req.assetId, shares: req.shares, limit: req.minPrice });
+    const px = (await this.data.book(req.assetId)).bids[0]!.price;
+    this.held.set(req.assetId, (this.held.get(req.assetId) ?? 0) - req.shares);
+    return { shares: req.shares, usd: req.shares * px, txs: ["0xpolytx2"] };
+  }
+  async positions(): Promise<PolyLivePosition[]> {
+    return [...this.held].filter(([, n]) => n > 0).map(([assetId, size]) => ({ assetId, title: assetId, outcome: "Yes", size, avgPrice: 0.5, currentPrice: 0.5, currentValue: size * 0.5 }));
+  }
+}
+
 export interface TestFrenOptions {
   privateLine?: boolean;
   signer?: SignerApi | null;
   live?: boolean;
   evmBalances?: Record<string, bigint>;
+  /** Polymarket's region check; defaults to "allowed". */
+  geoblocked?: () => Promise<boolean>;
 }
 
-/** The whole engine wired to fakes: Hyperliquid, Jupiter, pump.fun and Relay. */
+/** The whole engine wired to fakes: Hyperliquid, Jupiter, pump.fun, Relay, Derive and Polymarket. */
 export function buildTestFren(opts: TestFrenOptions = {}) {
   const fake = new FakeVenues();
   const pump = new FakePumpFun();
@@ -259,15 +451,29 @@ export function buildTestFren(opts: TestFrenOptions = {}) {
     waitForTx: async (_chain, hash) => void evmTxs.push(hash),
     fillTimeoutMs: 1_000,
   });
+  const poly = new FakePolymarketData();
+  const polyTrader = new FakePolymarketTrader(poly);
+  const hyperliquid = new HyperliquidVenue({ fetchFn: fake.fetch, apiUrl: "https://hl.test", isTestnet: true, store, signer });
+  const derive = new DeriveVenue({
+    fetchFn: fake.fetch,
+    apiUrl: "https://derive.test",
+    isTestnet: false,
+    store,
+    signer,
+    spotPrice: async (asset) => (await hyperliquid.markets.get(asset))?.midPx ?? null,
+  });
+  const polymarket = new PolymarketVenue({ store, data: poly, trader: signer ? polyTrader : null, geoblocked: opts.geoblocked ?? (async () => false) });
   const fren = new Fren({
     store,
     notifier,
     signer,
     isTestnet: true,
-    hyperliquid: new HyperliquidVenue({ fetchFn: fake.fetch, apiUrl: "https://hl.test", isTestnet: true, store, signer }),
+    hyperliquid,
     jupiter: new JupiterVenue({ fetchFn: fake.fetch, apiUrl: "https://jup.test", solanaRpcUrl: "https://rpc.test", store, signer, pumpFun: pump }),
     relay,
+    derive,
+    polymarket,
   });
   if (opts.live) store.setLimits({ ...store.getLimits(), mode: "live" });
-  return { fake, pump, store, notifier, fren, evmTxs };
+  return { fake, pump, poly, polyTrader, derive, polymarket, store, notifier, fren, evmTxs };
 }

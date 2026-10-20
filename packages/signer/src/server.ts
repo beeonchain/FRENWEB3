@@ -10,7 +10,7 @@
 import { readFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { readKeystore } from "./keystore.js";
-import { SIGNER_METHODS, type SignerRequest, type SignerResponse } from "./protocol.js";
+import { SIGNER_METHODS, decodeLine, encodeLine, type SignerRequest, type SignerResponse } from "./protocol.js";
 import { SignerRuleError } from "./rules.js";
 import { createSigner, type SignerApi } from "./signer.js";
 
@@ -33,12 +33,12 @@ function main() {
     ...(process.env.FREN_EVM_RPCS ? { evmRpcUrls: JSON.parse(process.env.FREN_EVM_RPCS) as Record<number, string> } : {}),
   });
 
-  const write = (res: SignerResponse) => process.stdout.write(`${JSON.stringify(res)}\n`);
+  const write = (res: SignerResponse) => process.stdout.write(`${encodeLine(res)}\n`);
   const rl = createInterface({ input: process.stdin });
   rl.on("line", (line) => {
     let req: SignerRequest;
     try {
-      req = JSON.parse(line) as SignerRequest;
+      req = decodeLine(line) as SignerRequest;
     } catch {
       return;
     }

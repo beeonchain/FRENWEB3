@@ -4,6 +4,17 @@ import { signL1Action, signUserSignedAction, type Signature } from "@nktkas/hype
 import { ApproveAgentTypes } from "@nktkas/hyperliquid/api/exchange";
 import { depositToHyperliquid } from "./arbitrum.js";
 import { sendEvmTransaction, type EvmTxRequest } from "./evm.js";
+import {
+  deriveAuthHeaders,
+  deriveSessionKeyOf,
+  registerDeriveSessionKey,
+  signDeriveOrder,
+  type DeriveAuthHeaders,
+  type DeriveOrderRequest,
+  type DeriveOrderSignature,
+  type DeriveSessionKeyRegistration,
+} from "./derive.js";
+import { signPolymarketTypedData, type PolyTypedData } from "./polymarket.js";
 import { addressesOf, type Addresses, type KeyMaterial } from "./keystore.js";
 import { SignerRuleError, checkHyperliquidAction, checkSolanaTransaction, type SolanaTxReport } from "./rules.js";
 
@@ -45,6 +56,14 @@ export interface SignerApi {
   hlDepositFromArbitrum(req: { amountUsd: number; isTestnet: boolean }): Promise<{ txHash: `0x${string}` }>;
   /** Send an EVM transaction to an allow-listed contract (Relay swaps and their approvals). Never carries ETH. */
   evmSendTransaction(req: EvmTxRequest): Promise<{ txHash: `0x${string}` }>;
+  /** Sign a Derive option order with the session key. The signer builds the action; it can only be a trade. */
+  deriveSignOrder(req: DeriveOrderRequest): Promise<DeriveOrderSignature>;
+  /** Derive REST auth headers from the session key, for the current time. */
+  deriveAuthHeaders(req: { isTestnet: boolean }): Promise<DeriveAuthHeaders>;
+  /** The master key registers Fren's own session key with the option-trading scope only. */
+  deriveRegisterSessionKey(req: { isTestnet: boolean }): Promise<DeriveSessionKeyRegistration>;
+  /** Polymarket EIP-712: login, orders, and deposit-wallet approvals. Nothing that moves funds out. */
+  polySignTypedData(req: PolyTypedData): Promise<`0x${string}`>;
 }
 
 export interface SignerOptions {
@@ -63,6 +82,7 @@ export function createSigner(keys: KeyMaterial, options: SignerOptions = {}): Si
   const sol = Keypair.fromSecretKey(Buffer.from(keys.solanaSecret, "base64"));
   const master = privateKeyToAccount(keys.evmMaster);
   const agent = privateKeyToAccount(keys.hlAgent);
+  const deriveSession = privateKeyToAccount(deriveSessionKeyOf(keys.evmMaster));
   const connection = options.solanaRpcUrl ? new Connection(options.solanaRpcUrl, "confirmed") : undefined;
 
   return {
@@ -133,6 +153,22 @@ export function createSigner(keys: KeyMaterial, options: SignerOptions = {}): Si
 
     async evmSendTransaction(req) {
       return { txHash: await sendEvmTransaction(master, req, options.evmRpcUrls) };
+    },
+
+    async deriveSignOrder(req) {
+      return signDeriveOrder(master.address, deriveSession, req);
+    },
+
+    async deriveAuthHeaders() {
+      return deriveAuthHeaders(master.address, deriveSession);
+    },
+
+    async deriveRegisterSessionKey({ isTestnet }) {
+      return registerDeriveSessionKey(master, deriveSession, isTestnet);
+    },
+
+    async polySignTypedData(req) {
+      return signPolymarketTypedData(master, req);
     },
   };
 }
