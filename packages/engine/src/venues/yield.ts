@@ -105,7 +105,7 @@ export class YieldVenue implements VenueAdapter {
       const cash = mode === "paper" ? this.o.store.paperUsdc() : await this.o.walletUsdc(r.chain).catch(() => 0);
       const usd = leg.amount.type === "usd" ? leg.amount.usd : cash * leg.amount.fraction;
       // A named protocol is tried as asked; "best" skips chains without the cash.
-      if (leg.protocol || cash >= usd) return { p: this.protocol(r.id), apy: r.apy, usd };
+      if (leg.protocol || (usd >= 1 && cash >= usd)) return { p: this.protocol(r.id), apy: r.apy, usd };
     }
     const want = leg.amount.type === "usd" ? fmtUsd(leg.amount.usd) : "that";
     throw new VenueError(`No chain has ${want} of USDC to lend. Fund Solana, Arbitrum or Base first.`);

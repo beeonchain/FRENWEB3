@@ -45,6 +45,14 @@ export const SOLANA_PROGRAMS = {
   pumpFun: "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P",
   /** PumpSwap, where pump.fun coins graduate to. */
   pumpAmm: "pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA",
+  /** Jupiter Lend (Earn), for USDC yield. Its Liquidity program is only ever called from inside it. */
+  jupiterLend: "jup3YeL8QhtSx1e253b2FDvsMNC87fDrgQZivbrndc9",
+  /** Kamino Lend, for USDC yield. */
+  kaminoLend: "KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD",
+  /** Kamino's Scope oracle, which a deposit may refresh first. */
+  kaminoScope: "HFn8GnPADiny6XqUoWE8uRPPxb29ikn4yTuPa9MF2fWJ",
+  /** Kamino opens a lookup table for the wallet on its first deposit. Only create and extend are allowed. */
+  addressLookupTable: "AddressLookupTab1e1111111111111111111111111",
 } as const;
 
 const NATIVE_MINT = new PublicKey("So11111111111111111111111111111111111111112");
@@ -161,6 +169,11 @@ export function checkSolanaTransaction(tx: VersionedTransaction, owner: PublicKe
       if (kind !== 0 && kind !== 1) throw new SignerRuleError(`Associated-token instruction ${String(kind)} is not allowed.`);
       const wallet = keyAt(ix.accountKeyIndexes[2] ?? -1);
       if (wallet !== ownerB58) throw new SignerRuleError("Token accounts may only be created for the wallet itself.");
+    } else if (program === SOLANA_PROGRAMS.addressLookupTable) {
+      // Create: [table, authority, payer, system]; Extend: [table, authority, payer, system].
+      const kind = data.readUInt32LE(0);
+      if (kind !== 0 && kind !== 2) throw new SignerRuleError(`Lookup-table instruction ${kind} is not allowed.`);
+      if (keyAt(ix.accountKeyIndexes[1] ?? -1) !== ownerB58) throw new SignerRuleError("Lookup tables may only be the wallet's own.");
     } else if (program === SOLANA_PROGRAMS.computeBudget) {
       if (data[0] === 2) cuLimit = data.readUInt32LE(1);
       if (data[0] === 3) cuPriceMicroLamports = data.readBigUInt64LE(1);

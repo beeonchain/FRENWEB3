@@ -273,6 +273,19 @@ export class JupiterVenue implements SpotVenueAdapter {
     return new PublicKey((await this.signer().addresses()).solana);
   }
 
+  async ownerAddress(): Promise<string> {
+    return (await this.owner()).toBase58();
+  }
+
+  /**
+   * Sign (the signer checks the programs and simulates SOL loss), send and
+   * confirm a transaction an API built for this wallet. Returns the signature.
+   */
+  async sendApiTransaction(txBase64: string, maxSolSpendLamports: number): Promise<string> {
+    const lastValidBlockHeight = (await this.connection.getBlockHeight("confirmed")) + 150;
+    return this.signAndSend(txBase64, maxSolSpendLamports, 0, lastValidBlockHeight);
+  }
+
   /** Raw (integer) balance of an SPL token in the wallet, summed across accounts. */
   async rawBalance(owner: PublicKey, mint: string): Promise<bigint> {
     const res = await this.connection.getParsedTokenAccountsByOwner(owner, { mint: new PublicKey(mint) });

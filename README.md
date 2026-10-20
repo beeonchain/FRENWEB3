@@ -2,7 +2,7 @@
 
 A self-hosted [OpenClaw](https://github.com/openclaw/openclaw) agent that trades on-chain from a chat window. Tell it in Telegram, "long gold 20x with $500, stop at -30%," and it finds the market, checks your limits, signs with keys that never leave your machine, and replies once with what it did.
 
-Status: **early backend**. It does Hyperliquid perps (crypto, gold, stocks, indices), Solana spot through Jupiter, pump.fun coins (on the curve and after), launch snipes, tokens on Base and Robinhood Chain through Relay, options on Derive, Polymarket bets, conditional orders, stops and targets, paper mode, and a kill switch. Yield comes next (see [docs/ROADMAP.md](docs/ROADMAP.md)).
+Status: **early backend**. It does Hyperliquid perps (crypto, gold, stocks, indices), Solana spot through Jupiter, pump.fun coins (on the curve and after), launch snipes, tokens on Base and Robinhood Chain through Relay, options on Derive, Polymarket bets, USDC yield on Jupiter Lend, Kamino and Aave, conditional orders, stops and targets, paper mode, and a kill switch (see [docs/ROADMAP.md](docs/ROADMAP.md) for what's next).
 
 ## How it works
 
@@ -14,7 +14,8 @@ OpenClaw agent ── fren plugin (tools + /ok /stop /limits /resume)
       ▼
 fren engine (local HTTP API on 127.0.0.1)
   ├─ policy: your caps, leverage, venues, daily spend. No LLM.
-  ├─ venues: Hyperliquid, Jupiter + pump.fun, Relay, Derive, Polymarket (paper or live)
+  ├─ venues: Hyperliquid, Jupiter + pump.fun, Relay, Derive, Polymarket,
+  │          Jupiter Lend, Kamino, Aave (paper or live)
   ├─ watcher: checks conditions every 15s (launch snipes every 2s). No LLM.
   └─ signer (separate process): holds the keys, refuses withdrawals,
      transfers to strangers and unknown programs
@@ -58,6 +59,7 @@ Then talk to your OpenClaw bot:
 - "snipe <CA> on Base with $100 the second it launches"
 - "short SOL $100 at 5x when funding goes above 0.02%/h"
 - "best way to bet ETH hits $4,000 by December, use $1,000" quotes the nearest Derive call and the matching Polymarket market side by side, then places the one you pick
+- "stake my USDC for the best yield" lends it wherever the rate is best (Jupiter Lend or Kamino on Solana, Aave on Arbitrum or Base). When a trade needs the cash, Fren takes it back on its own first.
 - "fund Polymarket with $500" moves USDC from Arbitrum to your Polymarket wallet (or "fund Derive" for options)
 - "stop everything"
 
@@ -81,4 +83,4 @@ Defaults: paper mode, $500 per trade, $2,000 per day, 20x max leverage, 10 open 
 npm run build && npm test
 ```
 
-Tests run against fakes of the Hyperliquid, Jupiter, Relay, Derive and Polymarket APIs and an in-process signer. Derive signatures are checked byte for byte against Derive's own SDK, plus one test that spawns the real signer process. Nothing in CI touches a real network or real money.
+Tests run against fakes of the Hyperliquid, Jupiter, Relay, Derive, Polymarket, Jupiter Lend, Kamino and Aave APIs and an in-process signer. Derive signatures are checked byte for byte against Derive's own SDK, plus one test that spawns the real signer process. Nothing in CI touches a real network or real money.

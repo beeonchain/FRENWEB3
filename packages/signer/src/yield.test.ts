@@ -1,6 +1,33 @@
+import { AddressLookupTableProgram, Keypair, PublicKey, TransactionInstruction, TransactionMessage, VersionedTransaction } from "@solana/web3.js";
 import { encodeFunctionData, erc20Abi, maxUint256, parseAbi } from "viem";
 import { describe, expect, it } from "vitest";
 import { checkEvmTransaction } from "./evm.js";
+import { SOLANA_PROGRAMS, checkSolanaTransaction } from "./rules.js";
+
+function txFor(payer: PublicKey, ixs: TransactionInstruction[]) {
+  return new VersionedTransaction(new TransactionMessage({ payerKey: payer, recentBlockhash: "11111111111111111111111111111111", instructions: ixs }).compileToV0Message());
+}
+
+describe("Solana lending rules", () => {
+  const owner = Keypair.generate().publicKey;
+  const call = (program: string) => new TransactionInstruction({ programId: new PublicKey(program), keys: [{ pubkey: owner, isSigner: true, isWritable: true }], data: Buffer.from([1, 2, 3]) });
+
+  it("allows Jupiter Lend and Kamino deposits, and Kamino's first-deposit lookup table", () => {
+    expect(checkSolanaTransaction(txFor(owner, [call(SOLANA_PROGRAMS.jupiterLend)]), owner).programs).toEqual([SOLANA_PROGRAMS.jupiterLend]);
+    const [create] = AddressLookupTableProgram.createLookupTable({ authority: owner, payer: owner, recentSlot: 1 });
+    const extend = AddressLookupTableProgram.extendLookupTable({ lookupTable: create.keys[0]!.pubkey, authority: owner, payer: owner, addresses: [owner] });
+    expect(() => checkSolanaTransaction(txFor(owner, [create, extend, call(SOLANA_PROGRAMS.kaminoLend)]), owner)).not.toThrow();
+  });
+
+  it("refuses lookup tables for someone else, closing tables, and Jupiter Lend's inner Liquidity program at the top level", () => {
+    const stranger = Keypair.generate();
+    const [theirs] = AddressLookupTableProgram.createLookupTable({ authority: stranger.publicKey, payer: owner, recentSlot: 1 });
+    expect(() => checkSolanaTransaction(txFor(owner, [theirs]), owner)).toThrow(/wallet's own/);
+    const close = AddressLookupTableProgram.closeLookupTable({ lookupTable: stranger.publicKey, authority: owner, recipient: stranger.publicKey });
+    expect(() => checkSolanaTransaction(txFor(owner, [close]), owner)).toThrow(/Lookup-table instruction 4/);
+    expect(() => checkSolanaTransaction(txFor(owner, [call("jupeiUmn818Jg1ekPURTpr4mFo29p46vygyykFJ3wZC")]), owner)).toThrow(/not on the signer's allow list/);
+  });
+});
 
 const POOL_ARB = "0x794a61358D6845594F94dc1DB02A252b5b4814aD";
 const USDC_ARB = "0xaf88d065e77c8cC2239327C5EDb3A432268e5831";

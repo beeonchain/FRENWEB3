@@ -413,6 +413,82 @@
                   "market",
                   "amount"
                 ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "earn"
+                  },
+                  "venue": {
+                    "type": "string",
+                    "const": "yield"
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "deposit",
+                      "withdraw"
+                    ]
+                  },
+                  "protocol": {
+                    "description": "Omit to use the best rate on a deposit, or to take from wherever the money is on a withdraw. Name one only if the owner did, or to follow fren_yield.",
+                    "type": "string",
+                    "enum": [
+                      "jupiter_lend",
+                      "kamino",
+                      "aave_arbitrum",
+                      "aave_base"
+                    ]
+                  },
+                  "amount": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "usd"
+                          },
+                          "usd": {
+                            "type": "number",
+                            "exclusiveMinimum": 0
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "usd"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "fraction"
+                          },
+                          "fraction": {
+                            "type": "number",
+                            "exclusiveMinimum": 0,
+                            "maximum": 1
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "fraction"
+                        ]
+                      }
+                    ],
+                    "description": "{type:\"usd\"} for an amount, or {type:\"fraction\"}: of the wallet's USDC on a deposit, of what is lent out on a withdraw."
+                  }
+                },
+                "required": [
+                  "kind",
+                  "venue",
+                  "action",
+                  "amount"
+                ]
               }
             ]
           },
@@ -437,7 +513,8 @@
                         "jupiter",
                         "relay",
                         "derive",
-                        "polymarket"
+                        "polymarket",
+                        "yield"
                       ]
                     },
                     "market": {

@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { SignerProcess, type SignerApi } from "@fren/signer";
 import { createApi } from "./api.js";
 import { Connection } from "@solana/web3.js";
-import { deriveApiUrl, hyperliquidApiUrl, frenPaths, loadConfig, relayApiUrl, type FrenConfig, type FrenPaths } from "./config.js";
+import { deriveApiUrl, hyperliquidApiUrl, jupiterLendApiUrl, frenPaths, loadConfig, relayApiUrl, type FrenConfig, type FrenPaths } from "./config.js";
 import { Fren } from "./engine.js";
 import type { Fetch } from "./http.js";
 import { TelegramNotifier } from "./notify.js";
@@ -14,6 +14,9 @@ import { RelayVenue } from "./venues/relay.js";
 import { DeriveVenue } from "./venues/derive.js";
 import { PolymarketVenue } from "./venues/polymarket.js";
 import { polymarketGeoblock, SdkPolymarketData, SdkPolymarketTrader } from "./venues/polymarket-sdk.js";
+import { AaveUsdc } from "./venues/aave.js";
+import { JupiterLendUsdc, KaminoUsdc } from "./venues/solana-lend.js";
+import { YieldVenue, type YieldProtocolAdapter } from "./venues/yield.js";
 
 export interface BuildOptions {
   config: FrenConfig;
@@ -26,31 +29,39 @@ export interface BuildOptions {
 export function buildFren({ config, store, signer, fetchFn = fetch }: BuildOptions): Fren {
   const isTestnet = config.network === "testnet";
   const hyperliquid = new HyperliquidVenue({ fetchFn, apiUrl: hyperliquidApiUrl(config), isTestnet, store, signer });
+  const jupiter = new JupiterVenue({
+    fetchFn,
+    apiUrl: config.jupiterApiUrl,
+    ...(config.jupiterApiKey ? { apiKey: config.jupiterApiKey } : {}),
+    solanaRpcUrl: config.solanaRpcUrl,
+    store,
+    signer,
+    pumpFun: new OnlinePumpFun(new Connection(config.solanaRpcUrl, { commitment: "confirmed", fetch: fetchFn })),
+    snipeTipLamports: config.snipeTipLamports,
+  });
+  const relay = new RelayVenue({
+    fetchFn,
+    apiUrl: relayApiUrl(config),
+    ...(config.relayApiKey ? { apiKey: config.relayApiKey } : {}),
+    isTestnet,
+    store,
+    signer,
+    rpcUrls: config.evmRpcUrls,
+  });
+  const lending: YieldProtocolAdapter[] = [
+    new JupiterLendUsdc({ fetchFn, apiUrl: jupiterLendApiUrl(config), ...(config.jupiterApiKey ? { apiKey: config.jupiterApiKey } : {}), solana: jupiter }),
+    new KaminoUsdc({ fetchFn, apiUrl: config.kaminoApiUrl, solana: jupiter }),
+    // Aave's pools are on mainnet Arbitrum and Base; on testnet the EVM side is Sepolia.
+    ...(isTestnet ? [] : [new AaveUsdc("arbitrum", relay), new AaveUsdc("base", relay)]),
+  ];
   return new Fren({
     store,
     signer,
     isTestnet,
     notifier: new TelegramNotifier(store, fetchFn, config.telegram),
     hyperliquid,
-    jupiter: new JupiterVenue({
-      fetchFn,
-      apiUrl: config.jupiterApiUrl,
-      ...(config.jupiterApiKey ? { apiKey: config.jupiterApiKey } : {}),
-      solanaRpcUrl: config.solanaRpcUrl,
-      store,
-      signer,
-      pumpFun: new OnlinePumpFun(new Connection(config.solanaRpcUrl, { commitment: "confirmed", fetch: fetchFn })),
-      snipeTipLamports: config.snipeTipLamports,
-    }),
-    relay: new RelayVenue({
-      fetchFn,
-      apiUrl: relayApiUrl(config),
-      ...(config.relayApiKey ? { apiKey: config.relayApiKey } : {}),
-      isTestnet,
-      store,
-      signer,
-      rpcUrls: config.evmRpcUrls,
-    }),
+    jupiter,
+    relay,
     derive: new DeriveVenue({
       fetchFn,
       apiUrl: deriveApiUrl(config),
@@ -66,6 +77,11 @@ export function buildFren({ config, store, signer, fetchFn = fetch }: BuildOptio
       data: new SdkPolymarketData(),
       trader: signer && !isTestnet ? new SdkPolymarketTrader(signer) : null,
       geoblocked: polymarketGeoblock(fetchFn),
+    }),
+    yield: new YieldVenue({
+      store,
+      protocols: lending,
+      walletUsdc: async (chain) => (chain === "solana" ? ((await jupiter.usdcBalance()) ?? 0) : ((await relay.usdcBalances())[chain] ?? 0)),
     }),
   });
 }
