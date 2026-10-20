@@ -5,7 +5,7 @@ import { Connection } from "@solana/web3.js";
 import { deriveApiUrl, hyperliquidApiUrl, jupiterLendApiUrl, frenPaths, loadConfig, relayApiUrl, type FrenConfig, type FrenPaths } from "./config.js";
 import { Fren } from "./engine.js";
 import type { Fetch } from "./http.js";
-import { TelegramNotifier } from "./notify.js";
+import { GatewayLine, OwnerNotifier, TelegramLine, type Exec, type OwnerLine } from "./notify.js";
 import { Store } from "./store.js";
 import { HyperliquidVenue } from "./venues/hyperliquid.js";
 import { JupiterVenue } from "./venues/jupiter.js";
@@ -23,10 +23,19 @@ export interface BuildOptions {
   store: Store;
   signer: SignerApi | null;
   fetchFn?: Fetch;
+  exec?: Exec;
 }
 
 /** Wire the engine from its parts. Used by the daemon and by tests with fakes. */
-export function buildFren({ config, store, signer, fetchFn = fetch }: BuildOptions): Fren {
+/** Lines to the owner, most private first. */
+export function ownerLines(config: FrenConfig, fetchFn: Fetch, exec?: Exec): OwnerLine[] {
+  return [
+    ...(config.telegram ? [new TelegramLine(fetchFn, config.telegram)] : []),
+    ...config.notify.map((t) => new GatewayLine(t, exec, config.openclawBin)),
+  ];
+}
+
+export function buildFren({ config, store, signer, fetchFn = fetch, exec }: BuildOptions): Fren {
   const isTestnet = config.network === "testnet";
   const hyperliquid = new HyperliquidVenue({ fetchFn, apiUrl: hyperliquidApiUrl(config), isTestnet, store, signer });
   const jupiter = new JupiterVenue({
@@ -58,7 +67,7 @@ export function buildFren({ config, store, signer, fetchFn = fetch }: BuildOptio
     store,
     signer,
     isTestnet,
-    notifier: new TelegramNotifier(store, fetchFn, config.telegram),
+    notifier: new OwnerNotifier(store, ownerLines(config, fetchFn, exec)),
     hyperliquid,
     jupiter,
     relay,

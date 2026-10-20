@@ -1,6 +1,6 @@
 # Fren
 
-A self-hosted [OpenClaw](https://github.com/openclaw/openclaw) agent that trades on-chain from a chat window. Tell it in Telegram, "long gold 20x with $500, stop at -30%," and it finds the market, checks your limits, signs with keys that never leave your machine, and replies once with what it did.
+A self-hosted [OpenClaw](https://github.com/openclaw/openclaw) agent that trades on-chain from a chat window. Tell it on Telegram or WhatsApp, "long gold 20x with $500, stop at -30%," and it finds the market, checks your limits, signs with keys that never leave your machine, and replies once with what it did.
 
 Status: **early backend**. It does Hyperliquid perps (crypto, gold, stocks, indices), Solana spot through Jupiter, pump.fun coins (on the curve and after), launch snipes, tokens on Base and Robinhood Chain through Relay, options on Derive, Polymarket bets, USDC yield on Jupiter Lend, Kamino and Aave, conditional orders, stops and targets, paper mode, and a kill switch (see [docs/ROADMAP.md](docs/ROADMAP.md) for what's next).
 
@@ -21,7 +21,7 @@ fren engine (local HTTP API on 127.0.0.1)
      transfers to strangers and unknown programs
 ```
 
-The model thinks, but it never signs and never polls. Anything that spends over your auto-approve level, loosens a limit, or turns Fren back on after a stop needs a code that goes straight to you on Telegram. The agent never sees the code. See [docs/SECURITY.md](docs/SECURITY.md).
+The model thinks, but it never signs and never polls. Anything that spends over your auto-approve level, loosens a limit, or turns Fren back on after a stop needs a code that goes straight to you on Telegram or WhatsApp, around the model. See [docs/SECURITY.md](docs/SECURITY.md).
 
 | Package | What |
 | --- | --- |
@@ -39,8 +39,11 @@ npm ci
 npm run build
 
 # Create wallets, API token and config in ~/.fren. Starts in paper mode on Hyperliquid testnet.
-node packages/engine/dist/cli.js init --network testnet \
-  --telegram-token <your OpenClaw Telegram bot token> --telegram-chat <your Telegram user id>
+# --notify is where codes and alerts reach you: any channel your OpenClaw gateway is connected to.
+node packages/engine/dist/cli.js init --network testnet --notify whatsapp:+15551234567
+
+# On Telegram, the bot token sends codes the agent never sees (repeat --notify for a fallback):
+#   init --telegram-token <your OpenClaw Telegram bot token> --telegram-chat <your Telegram user id>
 
 node packages/engine/dist/cli.js start
 
@@ -49,6 +52,8 @@ openclaw plugins install --link --accept-capabilities ./packages/openclaw-plugin
 ```
 
 For snipes, get a free Jupiter API key at portal.jup.ag and put it in `~/.fren/config.json` as `jupiterApiKey`; without one Jupiter allows about one request every two seconds.
+
+For WhatsApp, link it in OpenClaw first (`openclaw channels login --channel whatsapp`). A separate number for OpenClaw works best: chat with it from your own phone, and `--notify` your own number. Fren sends through the running gateway, so keep it up.
 
 Then talk to your OpenClaw bot:
 

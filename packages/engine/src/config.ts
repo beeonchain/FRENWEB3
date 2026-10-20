@@ -31,9 +31,19 @@ export const FrenConfig = z.object({
   /**
    * Direct line to the owner for confirmation codes and watcher alerts. Uses the
    * same bot as OpenClaw's Telegram channel; Fren only calls sendMessage, so it
-   * does not compete with OpenClaw for updates.
+   * does not compete with OpenClaw for updates. Tried before `notify`.
    */
   telegram: z.object({ botToken: z.string().min(10), ownerChatId: z.string().min(1) }).optional(),
+  /**
+   * Reach the owner on any channel the OpenClaw gateway is connected to, such as
+   * WhatsApp: { channel: "whatsapp", to: "+15551234567" }. Tried in order, after
+   * `telegram`; the first that works gets the message.
+   */
+  notify: z
+    .array(z.object({ channel: z.string().min(1), to: z.string().min(1), account: z.string().min(1).optional() }))
+    .default([]),
+  /** The OpenClaw CLI, for `notify`. */
+  openclawBin: z.string().default("openclaw"),
   watcherIntervalMs: z.number().int().min(2000).default(15_000),
   /** How often launch snipes check whether their token trades yet. */
   snipeIntervalMs: z.number().int().min(500).default(2_000),
