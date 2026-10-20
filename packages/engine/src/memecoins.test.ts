@@ -2,6 +2,7 @@ import { checkEvmTransaction, createSigner, generateKeys, type EvmTxRequest, typ
 import { decodeFunctionData, erc20Abi } from "viem";
 import { describe, expect, it } from "vitest";
 import { BASE_DOG, buildTestFren, RH_FROG } from "./testing.js";
+import { USDC_MINT } from "./venues/jupiter.js";
 
 const NEW_COIN = "NewCoin111111111111111111111111111111111pump";
 const ARB_USDC = "0xaf88d065e77c8cc2239327c5edb3a432268e5831";
@@ -93,6 +94,13 @@ describe("tokens on Base and Robinhood Chain", () => {
     const out = await t.fren.approve(codeFrom(t.notifier.sent));
     expect(out).toMatch(/❌ .*not on the signer's allow list/);
     expect(sent).toHaveLength(0);
+  });
+});
+
+describe("Solana USDC", () => {
+  it("is Circle's USDC mint", () => {
+    // Fakes accept any mint, so only this pins the real one (a wrong mint once shipped here).
+    expect(USDC_MINT).toBe("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
   });
 });
 
