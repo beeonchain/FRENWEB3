@@ -192,9 +192,10 @@
     try {
       renderStage(await api("status", { id }));
     } catch (e) {
-      if (e.status === 404 || e.message === "not found") {
+      if (e.status === 400 || e.status === 404 || e.message === "not found") {
         show("s-failed", "plan");
-        $("fail-msg").textContent = "We couldn't find that setup. The link may be wrong or expired.";
+        $("fail-msg").textContent =
+          e.status === 400 ? e.message : "We couldn't find that setup. The link may be wrong or expired.";
         return;
       }
       timer = setTimeout(poll, 8000); // network blip: keep trying
