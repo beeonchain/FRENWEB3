@@ -6,7 +6,7 @@
   const STEPS = ["plan", "pay", "build", "ready"];
   const SCREENS = ["s-plan", "s-code", "s-pay", "s-build", "s-ready", "s-failed"];
   const FALLBACK_PLANS = [
-    { slug: "micro-ip", name: "Micro", priceUsd: 10, recommended: true },
+    { slug: "micro-ip", name: "Micro", priceUsd: 10, vcpu: 2, ramGb: 2, recommended: true },
     { slug: "ai-agent-ip", name: "AI Agent", priceUsd: 15 },
     { slug: "small-ip", name: "Small", priceUsd: 16 },
   ];
@@ -107,39 +107,35 @@
     history.replaceState(null, "", u);
   }
 
+  // One plan, sized for Fren: users shouldn't have to compare server specs.
   function renderPlans(plans) {
+    const p = plans.find((x) => x.recommended) || plans[0];
     const box = $("plans");
     box.replaceChildren();
-    plans.forEach((p, i) => {
-      const label = document.createElement("label");
-      label.className = "plan";
-      const input = document.createElement("input");
-      input.type = "radio";
-      input.name = "plan";
-      input.value = p.slug;
-      input.checked = p.recommended || (i === 0 && !plans.some((x) => x.recommended));
-      const name = document.createElement("b");
-      name.textContent = p.name;
-      const price = document.createElement("span");
-      price.className = "plan__price";
-      price.append(`$${p.priceUsd}`);
-      const per = document.createElement("small");
-      per.textContent = " /month";
-      price.append(per);
-      const spec = document.createElement("span");
-      spec.className = "plan__spec";
-      spec.textContent = p.vcpu
-        ? `${p.vcpu} vCPU · ${p.ramGb} GB RAM` + (p.diskGb ? ` · ${p.diskGb} GB disk` : "")
-        : "Own IP address";
-      label.append(input, name, price, spec);
-      if (p.recommended) {
-        const tag = document.createElement("span");
-        tag.className = "plan__tag";
-        tag.textContent = "Recommended";
-        label.append(tag);
-      }
-      box.append(label);
-    });
+    const card = document.createElement("div");
+    card.className = "plan plan--only";
+    const input = document.createElement("input");
+    input.type = "radio";
+    input.name = "plan";
+    input.value = p.slug;
+    input.checked = true;
+    input.hidden = true;
+    const name = document.createElement("b");
+    name.textContent = "Fren server";
+    const price = document.createElement("span");
+    price.className = "plan__price";
+    price.append(`$${p.priceUsd}`);
+    const per = document.createElement("small");
+    per.textContent = " /month";
+    price.append(per);
+    const spec = document.createElement("span");
+    spec.className = "plan__spec";
+    spec.textContent =
+      "Everything Fren needs to run 24/7" +
+      (p.vcpu ? `: ${p.vcpu} vCPU, ${p.ramGb} GB memory and its own IP address.` : ", with its own IP address.") +
+      " Billed monthly in crypto, stop anytime.";
+    card.append(input, name, price, spec);
+    box.append(card);
   }
 
   function renderStage(d) {
