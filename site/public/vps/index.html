@@ -52,8 +52,11 @@
       .wiz__rail li.is-done:before { content: "✓"; background: var(--ink); color: var(--bg); }
       .wiz h2 { font-size: clamp(24px, 2.6vw, 32px); font-weight: 500; letter-spacing: -0.03em; }
       .wiz__lead { color: var(--muted); margin-top: 6px; font-size: 16px; font-weight: 300; line-height: 1.5; }
-      .plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-top: 22px; }
+      .plans { display: grid; grid-template-columns: minmax(0, 460px); gap: 12px; margin-top: 22px; }
+      .wiz button { font: inherit; }
       .plan { position: relative; display: block; cursor: pointer; border: 1px solid var(--line); border-radius: 16px; padding: 16px; transition: border-color .15s, box-shadow .15s; }
+      .plan--only { cursor: default; border-color: var(--ink); box-shadow: 2px 3px 0 var(--ink); }
+      .plan--only .plan__spec { font-size: 14px; line-height: 1.5; margin-top: 8px; }
       .plan input { position: absolute; opacity: 0; pointer-events: none; }
       .plan:has(input:checked) { border-color: var(--ink); box-shadow: 2px 3px 0 var(--ink); }
       .plan:has(input:focus-visible) { outline: 2px solid var(--ink); outline-offset: 3px; }
@@ -115,20 +118,20 @@
           Fren runs 24/7 on a server you rent, even when your laptop is closed. No KYC, just an email, and you pay in
           crypto. Everything happens right here in your browser. No terminal, no SSH.
         </p>
-        <div class="vp-facts"><span>From $10 a month</span><span>No KYC</span><span>Pay in crypto</span><span>About 10 minutes</span></div>
+        <div class="vp-facts"><span>$10 a month</span><span>No KYC</span><span>Pay in crypto</span><span>About 10 minutes</span></div>
 
         <div class="wiz" id="wiz" aria-live="polite">
           <ol class="wiz__rail" id="rail">
-            <li data-step="plan">Plan</li>
+            <li data-step="plan">Start</li>
             <li data-step="pay">Pay</li>
             <li data-step="build">Server</li>
             <li data-step="ready">Connect</li>
           </ol>
 
           <form id="s-plan" novalidate>
-            <h2>Pick your server</h2>
-            <p class="wiz__lead">Each plan has its own IP address, so your Fren can serve its private setup page.</p>
-            <div class="plans" id="plans" role="radiogroup" aria-label="Server plan"></div>
+            <h2>Your server</h2>
+            <p class="wiz__lead">One plan, sized for Fren. We rent it in your name; you only need an email.</p>
+            <div class="plans" id="plans"></div>
             <label class="field">
               <span>Your email</span>
               <input type="email" id="email" autocomplete="email" required placeholder="you@example.com" />
