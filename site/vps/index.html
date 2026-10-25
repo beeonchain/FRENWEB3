@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Fren · Run your Fren on a VPS</title>
+    <meta name="description" content="Rent a no-KYC server with crypto and set up Fren on it with one command. From $5 a month." />
+    <meta property="og:title" content="Run your Fren on a VPS" />
+    <meta property="og:description" content="No KYC, pay in crypto, one command. Fren runs 24/7 on a server you own." />
+    <meta property="og:image" content="https://getfren.netlify.app/assets/og.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="../assets/apple-touch-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Geologica:slnt,wght,CRSV,SHRP@-12..0,100..900,0..1,0..100&display=swap"
+    />
+    <link rel="stylesheet" href="../styles.css" />
+    <style>
+      .vp-top { border-bottom: 1px solid var(--line); }
+      .vp-top .wrap { height: 64px; display: flex; align-items: center; justify-content: space-between; }
+      .vp-hero { padding: 88px 0 24px; }
+      .vp-hero h1 { font-size: clamp(40px, 6vw, 80px); font-weight: 500; letter-spacing: -0.035em; line-height: 1.04; }
+      .vp-hero p { color: var(--muted); max-width: 600px; margin-top: 18px; font-size: clamp(17px, 1.4vw, 20px); font-weight: 300; line-height: 1.5; }
+      .vp-hero .cmd { max-width: 640px; margin-top: 32px; }
+      .vp-facts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+      .vp-facts span { border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; font-size: 13px; font-weight: 500; }
+      .vp-sec { padding: 56px 0; border-top: 1px solid var(--line); margin-top: 56px; }
+      .vp-sec h2 { font-size: clamp(28px, 3.4vw, 40px); font-weight: 500; letter-spacing: -0.03em; }
+      .vp-steps { list-style: none; margin: 28px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; counter-reset: s; }
+      .vp-steps li { background: var(--soft); border-radius: 22px; padding: 22px; counter-increment: s; }
+      .vp-steps li:before { content: counter(s); display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--ink); color: var(--bg); font-size: 13px; font-weight: 600; }
+      .vp-steps b { display: block; margin-top: 14px; font-size: 18px; font-weight: 500; letter-spacing: -0.02em; }
+      .vp-steps span { display: block; margin-top: 4px; color: var(--muted); font-size: 14px; font-weight: 300; line-height: 1.5; }
+      .vp-need { margin: 24px 0 0; padding: 0; list-style: none; display: grid; gap: 12px; max-width: 720px; }
+      .vp-need li { border-bottom: 1px solid var(--line); padding-bottom: 12px; font-size: 16px; font-weight: 300; }
+      .vp-need b { font-weight: 500; }
+      .vp-faq { max-width: 720px; margin-top: 20px; }
+      .vp-faq details { border-bottom: 1px solid var(--line); padding: 16px 0; }
+      .vp-faq summary { cursor: pointer; font-size: 17px; font-weight: 500; }
+      .vp-faq p { color: var(--muted); margin-top: 8px; font-size: 15px; font-weight: 300; line-height: 1.6; }
+      .vp-alt { color: var(--muted); margin-top: 28px; font-size: 15px; font-weight: 300; }
+    </style>
+  </head>
+  <body>
+    <header class="vp-top">
+      <div class="wrap">
+        <a href="../" aria-label="Fren home"
+          ><svg width="84" height="20" viewBox="0 0 336 80" fill="currentColor" role="img" aria-label="Fren">
+            <path d="M76 0C98.0914 0 116 17.9086 116 40C116 62.0914 98.0914 80 76 80H52C47.0684 80 42.5304 77.306 40.1689 72.9766L32 58H44C44 58 48 58 48 54C48 50 44 50 44 50H37.0586C31.4386 49.9998 26.2304 47.0506 23.3389 42.2314L16 30H44C44 30 48 30 48 26C48 22 44 22 44 22H21.498C15.6432 22 10.2559 18.802 7.45215 13.6621L0 0H76ZM84 24C75.1634 24 68 31.1634 68 40C68 48.8366 75.1634 56 84 56C92.8366 56 100 48.8366 100 40C100 31.1634 92.8366 24 84 24Z" /><circle cx="92" cy="40" r="8" /><path d="M254.516 22.8878C258.804 22.8878 262.628 23.6605 265.988 25.2045C269.348 26.7164 272.116 28.8394 274.292 31.5736C276.5 34.2757 278.021 37.4761 278.853 41.1754C279.685 44.8425 279.717 48.8316 278.949 53.142H242.179C242.211 55.0719 242.787 56.761 243.907 58.2084C245.027 59.6559 246.563 60.7972 248.515 61.6335C250.467 62.4376 252.739 62.8399 255.331 62.84C258.211 62.84 260.948 62.4705 263.54 61.7307C266.132 60.9587 268.612 59.7846 270.98 58.2084L275.925 68.9195C274.421 70.0775 272.468 71.1231 270.068 72.056C267.7 72.9566 265.172 73.6646 262.484 74.1793C259.828 74.7262 257.284 75 254.852 75C249.475 75 244.755 73.9216 240.691 71.7664C236.627 69.579 233.458 66.5396 231.186 62.6476C228.914 58.7231 227.778 54.1386 227.778 48.8953C227.778 45.0996 228.434 41.6092 229.746 38.4247C231.09 35.2402 232.946 32.4898 235.314 30.1738C237.714 27.8578 240.531 26.0722 243.763 24.8177C247.027 23.5311 250.612 22.8878 254.516 22.8878ZM184.259 20.6201H155.937V34.5648H181.283V48.6057H155.937V73.552H140V6H184.259V20.6201ZM222.44 22.7916C223.528 22.7916 224.504 22.8563 225.368 22.9849C226.232 23.1136 227.081 23.258 227.912 23.4188L226.04 39.6793C224.952 39.2934 223.8 38.9876 222.584 38.7624C221.368 38.5052 220.152 38.3766 218.936 38.3766C215.96 38.3766 213.496 39.2452 211.544 40.982C209.624 42.6869 208.663 45.1963 208.663 48.5095V73.552H192.919V24.3357H208.663V30.0776C210.135 27.5364 212.088 25.6872 214.52 24.5291C216.952 23.3711 219.592 22.7916 222.44 22.7916ZM315.887 22.8878C320.496 22.8878 324.288 23.8049 327.264 25.6384C330.24 27.4397 332.432 29.7881 333.84 32.6829C335.28 35.5458 336 38.5859 336 41.8027V73.552H320.255V46.7729C320.255 43.8136 319.471 41.4814 317.903 39.7765C316.367 38.0716 314.095 37.2192 311.086 37.2192C309.166 37.2193 307.486 37.6365 306.046 38.4728C304.638 39.3092 303.534 40.5002 302.734 42.0442C301.934 43.556 301.534 45.2928 301.534 47.2549V73.552H285.789V24.3357H301.534V29.5465C303.358 27.2305 305.519 25.5415 308.015 24.48C310.511 23.4186 313.135 22.8878 315.887 22.8878ZM254.083 34.3233C251.043 34.3234 248.515 35.0632 246.499 36.5429C244.515 38.0225 243.395 40.0013 243.139 42.4781H263.972C263.908 40.0012 262.996 38.0226 261.236 36.5429C259.476 35.0633 257.091 34.3233 254.083 34.3233Z" /></svg
+        ></a>
+        <a class="btn btn--sm" href="../#setup">All setup options</a>
+      </div>
+    </header>
+    <main class="wrap">
+      <section class="vp-hero">
+        <h1>Your Fren on a <span class="plq">VPS</span></h1>
+        <p>
+          Fren runs 24/7 on a server you rent, even when your laptop is closed. No KYC, just an email, and you pay in
+          crypto. Run one command on your laptop and the wizard does the rest.
+        </p>
+        <div class="cmd">
+          <code class="cmd__text" id="cmd-text">curl -fsSL https://getfren.netlify.app/vps.sh | bash</code>
+          <button type="button" class="cmd__copy" id="cmd-copy" aria-label="Copy VPS command">Copy</button>
+        </div>
+        <div class="vp-facts"><span>From $5 a month</span><span>No KYC</span><span>Pay in crypto</span><span>Mac, Linux, Windows (WSL)</span></div>
+      </section>
+
+      <section class="vp-sec">
+        <h2>What the wizard does</h2>
+        <ol class="vp-steps">
+          <li><b>Rents your server</b><span>It opens an EQVPS account with your email and picks a plan. The default is $10 a month with its own IP; a $5 shared-IP plan is there too.</span></li>
+          <li><b>Waits for payment</b><span>It prints a checkout link. Pay in USDC or USDT on Base, Ethereum, Solana, Tron, BNB or Polygon, or in BTC or XMR.</span></li>
+          <li><b>Installs Fren</b><span>It logs into the new server, installs everything and starts Fren as a background service.</span></li>
+          <li><b>Connects your chat</b><span>Log in to your AI model, pick Telegram or WhatsApp, and Fren creates your wallets on the server.</span></li>
+          <li><b>Backs up your keys</b><span>It offers to save a key backup to your laptop, so losing the server never means losing funds.</span></li>
+        </ol>
+      </section>
+
+      <section class="vp-sec">
+        <h2>Have these ready</h2>
+        <ul class="vp-need">
+          <li><b>About $10 in crypto</b> for the first month of the server.</li>
+          <li><b>An AI model login</b> such as Anthropic, OpenAI or OpenRouter. Fren uses it to understand your messages.</li>
+          <li><b>For Telegram:</b> a bot token from @BotFather. The wizard finds your user ID once you message the bot.</li>
+          <li><b>For WhatsApp:</b> a spare number for your Fren, plus your own number.</li>
+          <li><b>USDC</b> to fund your trading wallet once setup is done.</li>
+        </ul>
+      </section>
+
+      <section class="vp-sec">
+        <h2>Questions</h2>
+        <div class="vp-faq">
+          <details>
+            <summary>Who holds my keys?</summary>
+            <p>You do. The keys are created on your server and never leave it. The AI plans trades but never signs them, and anything over your caps needs a confirm code from you.</p>
+          </details>
+          <details>
+            <summary>Why run the command on my laptop and not the server?</summary>
+            <p>Because there is no server yet. The wizard rents it, connects to it for you and sets it up, so you never have to touch SSH yourself.</p>
+          </details>
+          <details>
+            <summary>What happens if I stop paying for the server?</summary>
+            <p>The server shuts down and Fren stops trading. Your funds stay in your wallets, and the key backup on your laptop lets you restore Fren anywhere.</p>
+          </details>
+          <details>
+            <summary>Does it start with real money?</summary>
+            <p>No. Every Fren starts in paper mode with $500 a trade, 20x max leverage and a confirm code for anything over $100. You turn on live trading when you're ready.</p>
+          </details>
+        </div>
+        <p class="vp-alt">Rather run it on your own computer? <a href="../#setup">Use the one-line install instead.</a></p>
+      </section>
+    </main>
+    <footer class="foot wrap">
+      <span>© 2026 Fren · <a href="../brand/">Brand</a></span>
+      <span class="foot__risk">Fren is software you run yourself. Leverage, meme coins, options and prediction markets are risky and you can lose everything you put in. Not financial advice.</span>
+    </footer>
+    <script>
+      (() => {
+        const btn = document.getElementById("cmd-copy"), cmd = document.getElementById("cmd-text");
+        btn.addEventListener("click", async () => {
+          try { await navigator.clipboard.writeText(cmd.textContent.trim()); btn.textContent = "Copied"; }
+          catch { getSelection().selectAllChildren(cmd); btn.textContent = "Press ⌘C"; }
+          setTimeout(() => (btn.textContent = "Copy"), 1800);
+        });
+      })();
+    </script>
+  </body>
+</html>
