@@ -5,6 +5,8 @@ export interface ExecContext {
   mode: Mode;
   planId: string | null;
   idx: number | null;
+  /** A launch snipe: pay for speed (Jito tip / higher priority fee). */
+  snipe?: boolean;
 }
 
 export interface ExecResult {
@@ -34,6 +36,11 @@ export interface VenueAdapter {
   positions(mode: Mode): Promise<PositionView[]>;
   /** Close every perp position (kill switch). Returns one line per close. */
   flatten(mode: Mode): Promise<string[]>;
+}
+
+/** Spot venues can also say whether a not-yet-launched token trades yet. */
+export interface SpotVenueAdapter extends VenueAdapter {
+  isTradable(token: string, chain: string): Promise<boolean>;
 }
 
 export class VenueError extends Error {

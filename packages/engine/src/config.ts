@@ -8,9 +8,18 @@ export const FrenConfig = z.object({
   network: z.enum(["mainnet", "testnet"]).default("testnet"),
   solanaRpcUrl: z.string().url().default("https://api.mainnet-beta.solana.com"),
   hyperliquidApiUrl: z.string().url().optional(),
-  /** Jupiter Swap API base. lite-api needs no key; set jupiterApiKey to use api.jup.ag. */
-  jupiterApiUrl: z.string().url().default("https://lite-api.jup.ag"),
+  /** Jupiter API base. Works without a key at a low rate limit; set jupiterApiKey (free at portal.jup.ag) for snipes. */
+  jupiterApiUrl: z.string().url().default("https://api.jup.ag"),
   jupiterApiKey: z.string().optional(),
+  /** Relay API, for tokens on Base, Robinhood Chain and Arbitrum. */
+  relayApiUrl: z.string().url().optional(),
+  relayApiKey: z.string().optional(),
+  /** Derive (options) API base; defaults to mainnet or testnet by network. */
+  deriveApiUrl: z.string().url().optional(),
+  /** RPC overrides for EVM chains. */
+  evmRpcUrls: z.object({ base: z.string().url(), robinhood: z.string().url(), arbitrum: z.string().url() }).partial().default({}),
+  /** Jito tip on launch snipes, in lamports (0.001 SOL default; the signer refuses more than 0.01 SOL). */
+  snipeTipLamports: z.number().int().min(0).max(10_000_000).default(1_000_000),
   api: z
     .object({
       host: z.string().default("127.0.0.1"),
@@ -24,6 +33,8 @@ export const FrenConfig = z.object({
    */
   telegram: z.object({ botToken: z.string().min(10), ownerChatId: z.string().min(1) }).optional(),
   watcherIntervalMs: z.number().int().min(2000).default(15_000),
+  /** How often launch snipes check whether their token trades yet. */
+  snipeIntervalMs: z.number().int().min(500).default(2_000),
   /** Starting paper balance in USDC. */
   paperStartingUsd: z.number().positive().default(10_000),
 });
@@ -58,7 +69,17 @@ export function loadConfig(paths: FrenPaths): FrenConfig {
   return FrenConfig.parse(raw);
 }
 
+export function relayApiUrl(cfg: FrenConfig): string {
+  if (cfg.relayApiUrl) return cfg.relayApiUrl;
+  return cfg.network === "mainnet" ? "https://api.relay.link" : "https://api.testnets.relay.link";
+}
+
 export function hyperliquidApiUrl(cfg: FrenConfig): string {
   if (cfg.hyperliquidApiUrl) return cfg.hyperliquidApiUrl;
   return cfg.network === "mainnet" ? "https://api.hyperliquid.xyz" : "https://api.hyperliquid-testnet.xyz";
+}
+
+export function deriveApiUrl(cfg: FrenConfig): string {
+  if (cfg.deriveApiUrl) return cfg.deriveApiUrl;
+  return cfg.network === "mainnet" ? "https://api.derive.xyz/v3" : "https://testnet.api.derive.xyz/v3";
 }

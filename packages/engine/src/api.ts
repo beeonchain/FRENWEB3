@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { describeLimits, type Fren } from "./engine.js";
+import type { BetQuery } from "./bets.js";
+import { describeLimits, type Fren, type FundVenue } from "./engine.js";
 
 /**
  * Local HTTP API for the OpenClaw plugin. Bound to 127.0.0.1 and gated by a
@@ -29,6 +30,12 @@ export function createApi(fren: Fren, token: string): Server {
     "POST /stop": async (b) => ({ text: await fren.stop(Boolean(b.flatten)) }),
     "POST /cancel": async (b) => ({ text: await fren.cancel(String(b.planId ?? "")) }),
     "POST /deposit/hyperliquid": async (b) => ({ text: await fren.depositToHyperliquid(Number(b.amountUsd)) }),
+    "POST /bets/quote": async (b) => fren.quoteBet(betQuery(b), String(b.request ?? "")),
+    "POST /fund": async (b) => {
+      const venue = String(b.venue);
+      if (venue !== "derive" && venue !== "polymarket") throw new Error('venue must be "derive" or "polymarket".');
+      return fren.requestFunding(venue as FundVenue, Number(b.amountUsd));
+    },
   };
 
   return createServer(async (req: IncomingMessage, res: ServerResponse) => {
@@ -57,4 +64,12 @@ export function createApi(fren: Fren, token: string): Server {
       send(500, { error: (err as Error).message });
     }
   });
+}
+
+function betQuery(b: Record<string, unknown>): BetQuery {
+  const q = { asset: String(b.asset ?? ""), target: Number(b.target), direction: b.direction === "below" ? "below" : "above", by: String(b.by ?? ""), budgetUsd: Number(b.budgetUsd) } as const;
+  if (!q.asset) throw new Error("asset is required, e.g. ETH.");
+  if (!(q.target > 0)) throw new Error("target must be a price above 0.");
+  if (!(q.budgetUsd > 0)) throw new Error("budgetUsd must be above 0.");
+  return q;
 }

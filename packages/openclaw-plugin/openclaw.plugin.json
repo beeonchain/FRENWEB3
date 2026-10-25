@@ -1,7 +1,7 @@
 {
   "id": "fren",
   "name": "Fren",
-  "description": "Trade perps, spot and more from chat. Keys stay in the local Fren engine, never in the agent.",
+  "description": "Trade perps, spot, options and prediction markets from chat. Keys stay in the local Fren engine, never in the agent.",
   "categories": ["finance-payments"],
   "skills": ["./skills"],
   "contracts": {
@@ -13,7 +13,9 @@
       "fren_cancel",
       "fren_stop",
       "fren_limits",
-      "fren_deposit_hyperliquid"
+      "fren_deposit_hyperliquid",
+      "fren_bet_quote",
+      "fren_fund"
     ]
   },
   "activation": {

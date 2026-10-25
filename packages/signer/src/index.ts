@@ -4,3 +4,7 @@ export * from "./signer.js";
 export * from "./client.js";
 export { HL_BRIDGE, HL_MIN_DEPOSIT_USD } from "./arbitrum.js";
 export type { SignerMethod } from "./protocol.js";
+export * from "./evm.js";
+export * from "./derive.js";
+export * from "./polymarket.js";
+export { encodeLine, decodeLine } from "./protocol.js";

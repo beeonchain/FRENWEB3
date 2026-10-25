@@ -1,11 +1,13 @@
-import { Connection, PublicKey, VersionedTransaction } from "@solana/web3.js";
-import { price as fmtPrice, usd as fmtUsd, type PlanStep, type ResolvedStep, type SwapLeg } from "@fren/core";
+import { ComputeBudgetProgram, Connection, PublicKey, SystemProgram, TransactionMessage, VersionedTransaction, type TransactionInstruction } from "@solana/web3.js";
+import { JITO_TIP_ACCOUNTS } from "@fren/signer";
+import { price as fmtPrice, shortToken, usd as fmtUsd, type PlanStep, type ResolvedStep, type SwapLeg } from "@fren/core";
 import type { SignerApi } from "@fren/signer";
 import { getJson, postJson, type Fetch } from "../http.js";
 import type { Store } from "../store.js";
-import { VenueError, type ExecContext, type ExecResult, type PositionView, type VenueAdapter } from "./types.js";
+import { curveUsdPrice, pumpFunNotes, type PumpCurve, type PumpFunApi } from "./pumpfun.js";
+import { VenueError, type ExecContext, type ExecResult, type PositionView, type SpotVenueAdapter } from "./types.js";
 
-export const USDC_MINT = "EPjFWdd5AufqSNqeM2qUv8BZ3vVdXzaa9Sr8ZnxsHMwv";
+export const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 export const SOL_MINT = "So11111111111111111111111111111111111111112";
 
 export interface TokenInfo {
@@ -49,9 +51,18 @@ export interface JupiterVenueOptions {
   solanaRpcUrl: string;
   store: Store;
   signer: SignerApi | null;
+  /** pump.fun coin info, for the "this coin is 4 minutes old" notes. Optional. */
+  pumpFun?: PumpFunApi;
+  /** Jito block engine for snipes. Defaults to Jito mainnet. */
+  jitoUrl?: string;
+  /** Jito tip for snipes, in lamports. */
+  snipeTipLamports?: number;
 }
 
-export class JupiterVenue implements VenueAdapter {
+/** Default Jito tip on a snipe: 0.001 SOL. The signer refuses anything over its own cap. */
+export const DEFAULT_SNIPE_TIP_LAMPORTS = 1_000_000;
+
+export class JupiterVenue implements SpotVenueAdapter {
   readonly venue = "jupiter" as const;
   private connection: Connection;
   private tokenCache = new Map<string, TokenInfo>();
@@ -115,6 +126,67 @@ export class JupiterVenue implements VenueAdapter {
     return found;
   }
 
+  /**
+   * For a launch snipe the token may trade before Jupiter's token list knows
+   * it. A mint the owner gave us is enough; decimals come from the chain.
+   */
+  private async tokenOrBare(query: string, mode: "paper" | "live"): Promise<TokenInfo> {
+    try {
+      return await this.token(query);
+    } catch (err) {
+      const mint = query.trim();
+      if (!isMint(mint)) throw err;
+      let decimals = 6; // pump.fun coins all use 6
+      if (mode === "live") {
+        const info = await this.connection.getParsedAccountInfo(new PublicKey(mint)).catch(() => null);
+        const parsed = (info?.value?.data as { parsed?: { info?: { decimals?: number } } } | undefined)?.parsed;
+        if (parsed?.info?.decimals !== undefined) decimals = parsed.info.decimals;
+      }
+      return { mint, symbol: shortToken(mint), name: "", decimals, verified: false, usdPrice: null, liquidityUsd: null };
+    }
+  }
+
+  private async quote(inputMint: string, outputMint: string, amount: bigint, slippageBps: number): Promise<JupQuote> {
+    return getJson<JupQuote>(
+      this.o.fetchFn,
+      `${this.o.apiUrl}/swap/v1/quote?inputMint=${inputMint}&outputMint=${outputMint}&amount=${amount}&slippageBps=${slippageBps}&restrictIntermediateTokens=true`,
+      this.headers(),
+    );
+  }
+
+  /** True once Jupiter can route USDC into the token: it has launched and has a pool or bonding curve. */
+  async isTradable(token: string): Promise<boolean> {
+    try {
+      const q = await this.quote(USDC_MINT, token.trim(), 1_000_000n, 5000);
+      return BigInt(q.outAmount) > 0n;
+    } catch {
+      // A pump.fun coin trades the moment its curve exists, before any aggregator sees it.
+      const curve = this.o.pumpFun ? await this.o.pumpFun.curve(token.trim()).catch(() => null) : null;
+      return curve !== null && !curve.complete && curve.quote !== "other";
+    }
+  }
+
+  private async solUsd(): Promise<number | null> {
+    return (await this.prices([SOL_MINT]).catch(() => new Map<string, number>())).get(SOL_MINT) ?? null;
+  }
+
+  private async pumpNotes(mint: string): Promise<string[]> {
+    if (!this.o.pumpFun) return [];
+    return pumpFunNotes(this.o.pumpFun, mint, await this.solUsd()).catch(() => []);
+  }
+
+  /** USD price from a small quote, for tokens too new for the price API. */
+  private async quotedPrice(t: TokenInfo): Promise<number | null> {
+    try {
+      const q = await this.quote(USDC_MINT, t.mint, 10_000_000n, 5000);
+      const out = Number(q.outAmount) / 10 ** t.decimals;
+      return out > 0 ? 10 / out : null;
+    } catch {
+      const curve = this.o.pumpFun ? await this.o.pumpFun.curve(t.mint).catch(() => null) : null;
+      return curve && !curve.complete ? curveUsdPrice(curve, await this.solUsd()) : null;
+    }
+  }
+
   async prices(mints: string[]): Promise<Map<string, number>> {
     const out = new Map<string, number>();
     if (mints.length === 0) return out;
@@ -130,9 +202,22 @@ export class JupiterVenue implements VenueAdapter {
   async resolve(step: PlanStep, index: number): Promise<ResolvedStep> {
     const leg = step.leg;
     if (leg.kind !== "swap") throw new VenueError(`Jupiter cannot run a ${leg.kind} leg.`);
-    const t = await this.token(leg.token);
+    const snipe = step.when.some((c) => c.type === "tradable");
+    let t: TokenInfo;
+    try {
+      t = await this.token(leg.token);
+    } catch (err) {
+      // A snipe targets a coin that doesn't exist yet; the address is all there is.
+      if (!snipe || !isMint(leg.token.trim())) throw err;
+      t = { mint: leg.token.trim(), symbol: shortToken(leg.token.trim()), name: "", decimals: 6, verified: false, usdPrice: null, liquidityUsd: null };
+    }
     if (t.mint === USDC_MINT) throw new VenueError("That's USDC already; pick the token to buy or sell.");
-    const canonical = { ...step, leg: { ...leg, token: t.mint } } as PlanStep;
+    const canonical = {
+      ...step,
+      leg: { ...leg, token: t.mint },
+      when: step.when.map((c) => (c.type === "tradable" && c.token.trim() === leg.token.trim() ? { ...c, token: t.mint } : c)),
+    } as PlanStep;
+    const notes = leg.side === "buy" && this.o.pumpFun ? await this.pumpNotes(t.mint) : [];
     const spend = leg.side === "buy" && leg.amount.type === "usd" ? leg.amount.usd : 0;
     return {
       index,
@@ -141,13 +226,14 @@ export class JupiterVenue implements VenueAdapter {
       spendUsd: spend,
       notionalUsd: spend,
       verifiedToken: t.verified,
+      ...(notes.length ? { notes } : {}),
     };
   }
 
   async execute(r: ResolvedStep, ctx: ExecContext): Promise<ExecResult> {
     const leg = r.step.leg;
     if (leg.kind !== "swap") throw new VenueError(`Jupiter cannot run a ${leg.kind} leg.`);
-    const t = await this.token(leg.token);
+    const t = await this.tokenOrBare(leg.token, ctx.mode);
     return ctx.mode === "paper" ? this.paperSwap(leg, t, ctx) : this.liveSwap(leg, t, ctx);
   }
 
@@ -155,7 +241,7 @@ export class JupiterVenue implements VenueAdapter {
 
   private async paperSwap(leg: SwapLeg, t: TokenInfo, ctx: ExecContext): Promise<ExecResult> {
     const store = this.o.store;
-    const px = (await this.prices([t.mint])).get(t.mint) ?? t.usdPrice;
+    const px = (await this.prices([t.mint]).catch(() => new Map<string, number>())).get(t.mint) ?? t.usdPrice ?? (await this.quotedPrice(t));
     if (!px) throw new VenueError(`No price for ${t.symbol} right now.`);
     const held = store.paperHolding(t.mint) ?? { mint: t.mint, symbol: t.symbol, amount: 0, costUsd: 0 };
     if (leg.side === "buy") {
@@ -195,6 +281,7 @@ export class JupiterVenue implements VenueAdapter {
 
   private async liveSwap(leg: SwapLeg, t: TokenInfo, ctx: ExecContext): Promise<ExecResult> {
     const owner = await this.owner();
+    const tip = ctx.snipe ? (this.o.snipeTipLamports ?? DEFAULT_SNIPE_TIP_LAMPORTS) : 0;
     let inputMint: string;
     let outputMint: string;
     let amount: bigint;
@@ -212,38 +299,23 @@ export class JupiterVenue implements VenueAdapter {
       if (leg.amount.type === "fraction") {
         amount = (raw * BigInt(Math.floor(leg.amount.fraction * 1e6))) / 1_000_000n;
       } else {
-        const px = (await this.prices([t.mint])).get(t.mint);
+        const px = (await this.prices([t.mint])).get(t.mint) ?? (await this.quotedPrice(t));
         if (!px) throw new VenueError(`No price for ${t.symbol} right now.`);
         const want = BigInt(Math.floor((leg.amount.usd / px) * 10 ** t.decimals));
         amount = want < raw ? want : raw;
       }
     }
 
-    const quote = await getJson<JupQuote>(
-      this.o.fetchFn,
-      `${this.o.apiUrl}/swap/v1/quote?inputMint=${inputMint}&outputMint=${outputMint}&amount=${amount}&slippageBps=${leg.maxSlippageBps}&restrictIntermediateTokens=true`,
-      this.headers(),
-    );
-    const swap = await postJson<{ swapTransaction: string; lastValidBlockHeight: number }>(
-      this.o.fetchFn,
-      `${this.o.apiUrl}/swap/v1/swap`,
-      {
-        quoteResponse: quote,
-        userPublicKey: owner.toBase58(),
-        dynamicComputeUnitLimit: true,
-        prioritizationFeeLamports: { priorityLevelWithMaxLamports: { maxLamports: 2_000_000, priorityLevel: "high" } },
-      },
-      this.headers(),
-    );
-
-    // Selling SOL itself loses `amount` lamports; everything else should cost only fees and rent.
-    const maxSolSpend = 10_000_000 + (inputMint === SOL_MINT ? Number(amount) : 0);
-    const { signedTxBase64 } = await this.signer().solSignTransaction({ txBase64: swap.swapTransaction, maxSolSpendLamports: maxSolSpend });
-    const raw = Buffer.from(signedTxBase64, "base64");
-    const signature = await this.connection.sendRawTransaction(raw, { skipPreflight: true, maxRetries: 3 });
-    const blockhash = VersionedTransaction.deserialize(raw).message.recentBlockhash;
-    const conf = await this.connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight: swap.lastValidBlockHeight }, "confirmed");
-    if (conf.value.err) throw new VenueError(`Swap failed on-chain: ${JSON.stringify(conf.value.err)} (tx ${signature})`);
+    let quote: JupQuote;
+    try {
+      quote = await this.quote(inputMint, outputMint, amount, leg.maxSlippageBps);
+    } catch (err) {
+      // Young pump.fun coins trade only on their bonding curve, which Jupiter may not route yet.
+      const curve = this.o.pumpFun ? await this.o.pumpFun.curve(t.mint).catch(() => null) : null;
+      if (!curve || curve.complete) throw err;
+      return this.curveSwap(leg, t, curve, owner, amount, tip, ctx);
+    }
+    const signature = await this.jupiterSwap(owner, quote, inputMint, amount, tip);
 
     const inDec = inputMint === USDC_MINT ? 6 : t.decimals;
     const outDec = outputMint === USDC_MINT ? 6 : t.decimals;
@@ -251,6 +323,10 @@ export class JupiterVenue implements VenueAdapter {
     const outUi = Number(quote.outAmount) / 10 ** outDec;
     const usd = leg.side === "buy" ? inUi : outUi;
     const qty = leg.side === "buy" ? outUi : inUi;
+    return this.recordLive(leg, t, ctx, qty, usd, signature, "");
+  }
+
+  private recordLive(leg: SwapLeg, t: TokenInfo, ctx: ExecContext, qty: number, usd: number, signature: string, suffix: string): ExecResult {
     this.o.store.insertFill({
       planId: ctx.planId,
       idx: ctx.idx,
@@ -265,12 +341,118 @@ export class JupiterVenue implements VenueAdapter {
       ref: signature,
     });
     const verb = leg.side === "buy" ? "Bought" : "Sold";
-    return { text: `✅ ${verb} ${fmtQty(qty)} ${t.symbol} for ${fmtUsd(usd)} at ${fmtPrice(usd / qty)} · https://solscan.io/tx/${signature}` };
+    return { text: `✅ ${verb} ${fmtQty(qty)} ${t.symbol} for ${fmtUsd(usd)} at ${fmtPrice(usd / qty)}${suffix} · https://solscan.io/tx/${signature}` };
+  }
+
+  /** Build, sign, send and confirm one Jupiter swap. Returns the signature. */
+  private async jupiterSwap(owner: PublicKey, quote: JupQuote, inputMint: string, amount: bigint, tip: number): Promise<string> {
+    const swap = await postJson<{ swapTransaction: string; lastValidBlockHeight: number }>(
+      this.o.fetchFn,
+      `${this.o.apiUrl}/swap/v1/swap`,
+      {
+        quoteResponse: quote,
+        userPublicKey: owner.toBase58(),
+        dynamicComputeUnitLimit: true,
+        prioritizationFeeLamports: tip
+          ? { jitoTipLamports: tip }
+          : { priorityLevelWithMaxLamports: { maxLamports: 2_000_000, priorityLevel: "high" } },
+      },
+      this.headers(),
+    );
+    // Selling SOL itself loses `amount` lamports; everything else should cost only fees, rent and the snipe tip.
+    const maxSol = 10_000_000 + tip + (inputMint === SOL_MINT ? Number(amount) : 0);
+    return this.signAndSend(swap.swapTransaction, maxSol, tip, swap.lastValidBlockHeight);
+  }
+
+  private async signAndSend(txBase64: string, maxSolSpendLamports: number, tip: number, lastValidBlockHeight: number): Promise<string> {
+    const { signedTxBase64 } = await this.signer().solSignTransaction({
+      txBase64,
+      maxSolSpendLamports,
+      ...(tip ? { jitoTipLamports: tip } : {}),
+    });
+    const raw = Buffer.from(signedTxBase64, "base64");
+    if (tip) await this.sendToJito(signedTxBase64).catch(() => undefined);
+    const signature = await this.connection.sendRawTransaction(raw, { skipPreflight: true, maxRetries: 3 });
+    const blockhash = VersionedTransaction.deserialize(raw).message.recentBlockhash;
+    const conf = await this.connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
+    if (conf.value.err) throw new VenueError(`Transaction failed on-chain: ${JSON.stringify(conf.value.err)} (tx ${signature})`);
+    return signature;
+  }
+
+  /**
+   * Trade a coin on its pump.fun bonding curve. SOL-priced curves need SOL, so
+   * a buy first swaps the USDC to SOL, and a sell swaps the SOL back to USDC.
+   */
+  private async curveSwap(leg: SwapLeg, t: TokenInfo, curve: PumpCurve, owner: PublicKey, amount: bigint, tip: number, ctx: ExecContext): Promise<ExecResult> {
+    const pump = this.o.pumpFun!;
+    if (curve.quote === "other") throw new VenueError(`${t.symbol}'s curve is priced in another coin, which Fren can't trade yet.`);
+    const slippagePct = leg.maxSlippageBps / 100;
+    const user = owner.toBase58();
+
+    if (leg.side === "buy") {
+      let quoteRaw = amount;
+      if (curve.quote === "SOL") {
+        const q = await this.quote(USDC_MINT, SOL_MINT, amount, 100);
+        await this.jupiterSwap(owner, q, USDC_MINT, amount, 0);
+        quoteRaw = BigInt((q as { otherAmountThreshold?: string }).otherAmountThreshold ?? q.outAmount);
+      }
+      const before = await this.rawBalance(owner, t.mint);
+      const trade = await pump.buy({ mint: t.mint, user, quoteAmountRaw: quoteRaw, slippagePct });
+      const maxSol = 10_000_000 + tip + (curve.quote === "SOL" ? Number(quoteRaw) : 0);
+      const signature = await this.sendInstructions(owner, trade.instructions, maxSol, tip);
+      const got = (await this.rawBalance(owner, t.mint).catch(() => before + trade.expectedOutRaw)) - before;
+      const qty = Number(got > 0n ? got : trade.expectedOutRaw) / 10 ** t.decimals;
+      return this.recordLive(leg, t, ctx, qty, Number(amount) / 1e6, signature, " on the pump.fun curve");
+    }
+
+    const solBefore = BigInt(await this.connection.getBalance(owner));
+    const usdcBefore = await this.rawBalance(owner, USDC_MINT);
+    const trade = await pump.sell({ mint: t.mint, user, tokenAmountRaw: amount, slippagePct });
+    const signature = await this.sendInstructions(owner, trade.instructions, 10_000_000 + tip, tip);
+    const qty = Number(amount) / 10 ** t.decimals;
+    let usd: number;
+    let suffix = " on the pump.fun curve";
+    if (curve.quote === "SOL") {
+      const gained = BigInt(await this.connection.getBalance(owner)) - solBefore;
+      const lamports = gained > 0n ? gained : trade.expectedOutRaw;
+      try {
+        const q = await this.quote(SOL_MINT, USDC_MINT, lamports, 100);
+        await this.jupiterSwap(owner, q, SOL_MINT, lamports, 0);
+        usd = Number(q.outAmount) / 1e6;
+      } catch {
+        const solPx = (await this.prices([SOL_MINT]).catch(() => new Map<string, number>())).get(SOL_MINT) ?? 0;
+        usd = (Number(lamports) / 1e9) * solPx;
+        suffix += ", kept the proceeds as SOL (swapping to USDC failed)";
+      }
+    } else {
+      usd = Number((await this.rawBalance(owner, USDC_MINT)) - usdcBefore) / 1e6;
+    }
+    return this.recordLive(leg, t, ctx, qty, usd, signature, suffix);
+  }
+
+  private async sendInstructions(owner: PublicKey, instructions: TransactionInstruction[], maxSol: number, tip: number): Promise<string> {
+    const ixs = [ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }), ComputeBudgetProgram.setComputeUnitPrice({ microLamports: tip ? 2_000_000 : 500_000 }), ...instructions];
+    if (tip) ixs.push(SystemProgram.transfer({ fromPubkey: owner, toPubkey: new PublicKey(randomTipAccount()), lamports: tip }));
+    const { blockhash, lastValidBlockHeight } = await this.connection.getLatestBlockhash("confirmed");
+    const msg = new TransactionMessage({ payerKey: owner, recentBlockhash: blockhash, instructions: ixs }).compileToV0Message();
+    const tx = Buffer.from(new VersionedTransaction(msg).serialize()).toString("base64");
+    return this.signAndSend(tx, maxSol, tip, lastValidBlockHeight);
+  }
+
+  /** Jito's block engine lands tipped transactions faster than plain RPC. We send to both. */
+  private async sendToJito(txBase64: string): Promise<void> {
+    await postJson(this.o.fetchFn, `${this.o.jitoUrl ?? "https://mainnet.block-engine.jito.wtf"}/api/v1/transactions`, {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "sendTransaction",
+      params: [txBase64, { encoding: "base64" }],
+    });
   }
 
   async positions(mode: "paper" | "live"): Promise<PositionView[]> {
     if (mode === "paper") {
-      const holdings = this.o.store.paperHoldings();
+      // Other venues keep paper holdings under prefixed keys ("evm:base:0x…"); Solana mints never contain a colon.
+      const holdings = this.o.store.paperHoldings().filter((h) => !h.mint.includes(":"));
       const px = await this.prices(holdings.map((h) => h.mint)).catch(() => new Map<string, number>());
       return holdings.map((h) => {
         const mark = px.get(h.mint) ?? null;
@@ -305,6 +487,11 @@ export class JupiterVenue implements VenueAdapter {
   async flatten(): Promise<string[]> {
     return [];
   }
+}
+
+function randomTipAccount(): string {
+  const all = [...JITO_TIP_ACCOUNTS];
+  return all[Math.floor(Math.random() * all.length)]!;
 }
 
 function fmtQty(q: number): string {

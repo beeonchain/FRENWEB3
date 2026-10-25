@@ -2,14 +2,19 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import type { Addresses } from "./keystore.js";
-import type { SignerMethod, SignerResponse } from "./protocol.js";
+import { decodeLine, encodeLine, type SignerMethod, type SignerResponse } from "./protocol.js";
 import type { HlApproveAgentResult, HlSignRequest, Signature, SignerApi, SolSignRequest, SolSignResult } from "./signer.js";
+import type { DeriveAuthHeaders, DeriveOrderRequest, DeriveOrderSignature, DeriveSessionKeyRegistration } from "./derive.js";
+import type { PolyTypedData } from "./polymarket.js";
+import type { EvmTxRequest } from "./evm.js";
 
 export interface SignerProcessOptions {
   keystorePath: string;
   passphraseFile?: string;
   solanaRpcUrl?: string;
   arbitrumRpcUrl?: string;
+  /** RPC per EVM chain id. */
+  evmRpcUrls?: Record<number, string>;
   /** Run the signer as another OS user, e.g. ["sudo", "-u", "fren-signer"]. */
   commandPrefix?: string[];
 }
@@ -41,6 +46,7 @@ export class SignerProcess implements SignerApi {
       ...(process.env.FREN_PASSPHRASE ? { FREN_PASSPHRASE: process.env.FREN_PASSPHRASE } : {}),
       ...(opts.solanaRpcUrl ? { FREN_SOLANA_RPC: opts.solanaRpcUrl } : {}),
       ...(opts.arbitrumRpcUrl ? { FREN_ARBITRUM_RPC: opts.arbitrumRpcUrl } : {}),
+      ...(opts.evmRpcUrls ? { FREN_EVM_RPCS: JSON.stringify(opts.evmRpcUrls) } : {}),
     };
     this.child = spawn(cmd!, prefixArgs, { env, stdio: ["pipe", "pipe", "pipe"] });
 
@@ -60,7 +66,7 @@ export class SignerProcess implements SignerApi {
     });
 
     createInterface({ input: this.child.stdout }).on("line", (line) => {
-      const msg = JSON.parse(line) as SignerResponse;
+      const msg = decodeLine(line) as SignerResponse;
       if (msg.id === 0) {
         markReady();
         return;
@@ -78,7 +84,7 @@ export class SignerProcess implements SignerApi {
     const id = this.nextId++;
     return new Promise<T>((resolve, reject) => {
       this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject });
-      this.child.stdin.write(`${JSON.stringify({ id, method, params })}\n`);
+      this.child.stdin.write(`${encodeLine({ id, method, params })}\n`);
     });
   }
 
@@ -96,6 +102,22 @@ export class SignerProcess implements SignerApi {
   }
   hlDepositFromArbitrum(req: { amountUsd: number; isTestnet: boolean }) {
     return this.call<{ txHash: `0x${string}` }>("hlDepositFromArbitrum", req);
+  }
+
+  evmSendTransaction(req: EvmTxRequest) {
+    return this.call<{ txHash: `0x${string}` }>("evmSendTransaction", req);
+  }
+  deriveSignOrder(req: DeriveOrderRequest) {
+    return this.call<DeriveOrderSignature>("deriveSignOrder", req);
+  }
+  deriveAuthHeaders(req: { isTestnet: boolean }) {
+    return this.call<DeriveAuthHeaders>("deriveAuthHeaders", req);
+  }
+  deriveRegisterSessionKey(req: { isTestnet: boolean }) {
+    return this.call<DeriveSessionKeyRegistration>("deriveRegisterSessionKey", req);
+  }
+  polySignTypedData(req: PolyTypedData) {
+    return this.call<`0x${string}`>("polySignTypedData", req);
   }
 
   close() {

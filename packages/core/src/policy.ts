@@ -19,6 +19,8 @@ export interface ResolvedStep {
   venueMaxLeverage?: number;
   /** False when a token could not be matched to a verified list. */
   verifiedToken?: boolean;
+  /** Facts the venue wants the owner to see before approving (e.g. a coin is 3 minutes old). Shown as warnings. */
+  notes?: string[];
 }
 
 export interface PolicyState {
@@ -72,6 +74,7 @@ export function evaluatePolicy(
     const warnings: string[] = [];
     const leg = r.step.leg;
     let needsConfirm = false;
+    warnings.push(...(r.notes ?? []));
 
     if (!limits.allowedVenues.includes(leg.venue)) {
       reasons.push(`${leg.venue} is not on your allowed venues.`);
@@ -102,6 +105,12 @@ export function evaluatePolicy(
     if (leg.kind === "swap" && leg.side === "buy" && r.verifiedToken === false) {
       warnings.push(`${r.symbol} is not on a verified token list. Check the address.`);
       needsConfirm = true;
+    }
+
+    if (leg.kind === "swap" && r.step.when.some((c) => c.type === "tradable")) {
+      warnings.push(
+        `Launch snipe: buys at whatever the price is when it starts trading, with up to ${(leg.maxSlippageBps / 100).toFixed(1)}% slippage. Bots usually get the first block.`,
+      );
     }
 
     const isNow = r.step.when.length === 0;

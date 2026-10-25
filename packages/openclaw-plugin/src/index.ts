@@ -18,6 +18,8 @@ export const TOOL_NAMES = [
   "fren_stop",
   "fren_limits",
   "fren_deposit_hyperliquid",
+  "fren_bet_quote",
+  "fren_fund",
 ] as const;
 
 type ToolName = (typeof TOOL_NAMES)[number];
@@ -59,7 +61,7 @@ export function toolSpecs(client: EngineClient): ToolSpec[] {
       name: "fren_markets",
       label: "Find a market",
       description:
-        "Search Hyperliquid perps (crypto, gold, stocks, indices) and Solana tokens. Call this before fren_trade whenever you are not sure of the exact symbol or mint.",
+        "Search Hyperliquid perps (crypto, gold, stocks, indices), Solana tokens (pump.fun included) and tokens on Base, Robinhood Chain and Arbitrum. Call this before fren_trade whenever you are not sure of the exact symbol, mint or contract address.",
       parameters: Type.Object({ query: Type.String({ description: 'What the user called it: "gold", "nasdaq", "BTC", "bonk", or a contract address.' }) }),
       run: async (p) => (await client.call<{ text: string }>("GET", `/markets?q=${encodeURIComponent(String(p.query))}`)).text,
     },
@@ -70,6 +72,7 @@ export function toolSpecs(client: EngineClient): ToolSpec[] {
         "Propose a trading plan built from the user's request. Fren checks it against the user's limits, then either executes it,",
         "asks the user for a confirmation code, or refuses with reasons. Relay the returned text to the user as-is.",
         "One plan can hold several legs; legs with `when` conditions wait for the watcher.",
+        'To snipe a launch, add when: [{type:"tradable", venue, chain, token}] with the same contract address.',
         "Never invent token addresses: use one the user gave or one fren_markets returned.",
       ].join(" "),
       parameters: Type.Object({ plan: Type.Unsafe<Record<string, unknown>>(planSchema) }),
@@ -114,6 +117,40 @@ export function toolSpecs(client: EngineClient): ToolSpec[] {
       description: "Move USDC from the user's own Arbitrum address into their own Hyperliquid account (minimum 5 USDC).",
       parameters: Type.Object({ amountUsd: Type.Number({ minimum: 5 }) }),
       run: async (p) => (await client.call<{ text: string }>("POST", "/deposit/hyperliquid", { amountUsd: p.amountUsd })).text,
+    },
+    {
+      name: "fren_bet_quote",
+      label: "Quote a price bet",
+      description: [
+        'Quote a bet on a price target, e.g. "ETH hits $4,000 by December, use $1,000": the best matching call (or put) option on Derive',
+        "and the best matching Polymarket market, side by side. Places nothing. Show the owner the comparison as-is; when they pick one,",
+        "call fren_trade with the matching plan below the comparison, unchanged.",
+      ].join(" "),
+      parameters: Type.Object({
+        asset: Type.String({ description: 'Underlying ticker, e.g. "ETH", "BTC", "SOL".' }),
+        target: Type.Number({ description: "Target price in USD, e.g. 4000." }),
+        direction: Type.Union([Type.Literal("above"), Type.Literal("below")], { description: '"above" for hits/reaches/over, "below" for drops/falls/under.' }),
+        by: Type.String({ description: 'ISO date the bet is decided by. "By December" means the end of December: 2026-12-31.' }),
+        budgetUsd: Type.Number({ minimum: 1, description: "How much the owner wants to put in, in USD." }),
+        request: Type.Optional(Type.String({ description: "The owner's message, word for word." })),
+      }),
+      run: async (p) => {
+        const q = await client.call<{ text: string; plans: Record<string, unknown> }>("POST", "/bets/quote", p);
+        const plans = Object.entries(q.plans ?? {});
+        if (!plans.length) return q.text;
+        return `${q.text}\n\n(For you, not the owner: the plan for each choice, to pass to fren_trade as-is.)\n${plans.map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join("\n")}`;
+      },
+    },
+    {
+      name: "fren_fund",
+      label: "Fund options or bets",
+      description:
+        "Move USDC from the owner's Arbitrum (or Base) address to their own Derive account (options) or Polymarket wallet (bets). Live mode only. Always sends the owner a code to approve.",
+      parameters: Type.Object({
+        venue: Type.Union([Type.Literal("derive"), Type.Literal("polymarket")]),
+        amountUsd: Type.Number({ minimum: 10 }),
+      }),
+      run: async (p, ctx) => deliverOwnerCode(await client.call<OwnerResult>("POST", "/fund", { venue: p.venue, amountUsd: p.amountUsd }), ctx),
     },
   ];
 }
@@ -244,7 +281,7 @@ function registerCommands(api: OpenClawPluginApi, client: EngineClient) {
 export default definePluginEntry({
   id: "fren",
   name: "Fren",
-  description: "Trade perps, spot and more from chat. Keys stay in the local Fren engine.",
+  description: "Trade perps, spot, options and prediction markets from chat. Keys stay in the local Fren engine.",
   register(api) {
     const cfg = (api.pluginConfig ?? {}) as { apiUrl?: string; tokenFile?: string };
     const client = new EngineClient({

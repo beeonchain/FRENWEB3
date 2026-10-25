@@ -27,7 +27,44 @@ function pctMove(p: number): string {
   return `${p >= 1 ? p.toFixed(1) : p.toPrecision(2)}%`;
 }
 
-const venueName: Record<string, string> = { hyperliquid: "Hyperliquid", jupiter: "Jupiter" };
+const venueName: Record<string, string> = { hyperliquid: "Hyperliquid", jupiter: "Jupiter", relay: "Relay", derive: "Derive", polymarket: "Polymarket" };
+
+export const chainName: Record<string, string> = { solana: "Solana", base: "Base", robinhood: "Robinhood Chain", arbitrum: "Arbitrum" };
+
+/** "0x1234…abcd" for long addresses, unchanged for symbols. */
+export function shortToken(t: string): string {
+  return t.length > 20 ? `${t.slice(0, 6)}…${t.slice(-4)}` : t;
+}
+
+export interface OptionName {
+  asset: string;
+  /** Derive options expire at 08:00 UTC on the date in their name. */
+  expiry: Date;
+  strike: number;
+  type: "call" | "put";
+}
+
+/** "ETH-20261225-4000-C" → ETH, 25 Dec 2026 08:00 UTC, 4000, call. Null when it isn't an option name. */
+export function parseOptionName(name: string): OptionName | null {
+  const m = /^([A-Z0-9]+)-(\d{4})(\d{2})(\d{2})-(\d+(?:\.\d+)?)-([CP])$/.exec(name);
+  if (!m) return null;
+  return {
+    asset: m[1]!,
+    expiry: new Date(Date.UTC(Number(m[2]), Number(m[3]) - 1, Number(m[4]), 8)),
+    strike: Number(m[5]),
+    type: m[6] === "C" ? "call" : "put",
+  };
+}
+
+export function shortDate(d: Date): string {
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+}
+
+/** "ETH $4,000 call expiring Dec 25, 2026" */
+export function describeOption(name: string): string {
+  const o = parseOptionName(name);
+  return o ? `${o.asset} ${price(o.strike)} ${o.type} expiring ${shortDate(o.expiry)}` : name;
+}
 
 export function describeLeg(leg: Leg, resolved?: Pick<ResolvedStep, "symbol" | "notionalUsd">): string {
   const where = venueName[leg.venue] ?? leg.venue;
@@ -53,13 +90,33 @@ export function describeLeg(leg: Leg, resolved?: Pick<ResolvedStep, "symbol" | "
       return `${share} your ${resolved?.symbol ?? leg.market} position on ${where}`;
     }
     case "swap": {
-      const token = resolved?.symbol ?? leg.token;
+      const token = shortToken(resolved?.symbol ?? leg.token);
+      const where = leg.venue === "relay" ? chainName[leg.chain] ?? leg.chain : venueName[leg.venue];
       if (leg.side === "buy") {
         const amt = leg.amount.type === "usd" ? usd(leg.amount.usd) : `${Math.round(leg.amount.fraction * 100)}% of your USDC`;
         return `Buy ${amt} of ${token} on ${where}`;
       }
       const amt = leg.amount.type === "fraction" ? `${Math.round(leg.amount.fraction * 100)}% of your` : `${usd(leg.amount.usd)} of`;
       return `Sell ${amt} ${token} on ${where}`;
+    }
+    case "option": {
+      const what = describeOption(leg.instrument);
+      if (leg.side === "buy") {
+        const amt = leg.amount.type === "usd" ? usd(leg.amount.usd) : `${Math.round(leg.amount.fraction * 100)}% of your USDC`;
+        return `Buy ${amt} of the ${what} on Derive`;
+      }
+      const amt = leg.amount.type === "fraction" ? `${Math.round(leg.amount.fraction * 100)}% of your` : `${usd(leg.amount.usd)} of your`;
+      return `Sell ${amt} ${what} on Derive`;
+    }
+    case "prediction": {
+      const market = resolved?.symbol ?? leg.market;
+      if (leg.side === "buy") {
+        const amt = leg.amount.type === "usd" ? usd(leg.amount.usd) : `${Math.round(leg.amount.fraction * 100)}% of your USDC`;
+        const cap = leg.limitPrice !== undefined ? ` at up to ${Math.round(leg.limitPrice * 100)}¢ a share` : "";
+        return `Bet ${amt} on "${leg.outcome}" for "${market}" on Polymarket${cap}`;
+      }
+      const amt = leg.amount.type === "fraction" ? `${Math.round(leg.amount.fraction * 100)}% of your` : `${usd(leg.amount.usd)} of your`;
+      return `Sell ${amt} "${leg.outcome}" shares in "${market}" on Polymarket`;
     }
   }
 }
@@ -70,6 +127,8 @@ export function describeCondition(c: Condition): string {
       return `${c.market} price ${c.op} ${price(c.value)}`;
     case "funding":
       return `${c.market} funding ${c.op} ${c.value}%/h`;
+    case "tradable":
+      return `${shortToken(c.token)} starts trading${c.chain === "solana" ? "" : ` on ${chainName[c.chain] ?? c.chain}`}`;
     case "time":
       return `after ${new Date(c.after).toUTCString()}`;
   }
@@ -82,6 +141,7 @@ export function describeConditionStatus(s: ConditionStatus): string {
   if (s.current === null) now = " (no data yet)";
   else if (c.type === "price") now = ` (now ${price(Number(s.current))})`;
   else if (c.type === "funding") now = ` (now ${Number(s.current).toFixed(4)}%/h)`;
+  else if (c.type === "tradable") now = ` (${s.current})`;
   return `${mark} ${describeCondition(c)}${now}`;
 }
 

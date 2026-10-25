@@ -19,7 +19,7 @@ export const Limits = z.object({
   maxOpenPositions: z.number().int().min(1).default(10),
   /** Plans spending at or under this run without a confirmation code. */
   autoApproveUsd: z.number().min(0).default(100),
-  allowedVenues: z.array(Venue).default(["hyperliquid", "jupiter"]),
+  allowedVenues: z.array(Venue).default(["hyperliquid", "jupiter", "relay", "derive", "polymarket"]),
 });
 export type Limits = z.infer<typeof Limits>;
 

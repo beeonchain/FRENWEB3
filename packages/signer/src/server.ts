@@ -3,14 +3,14 @@
  * The signer process. Started by the engine as a child process; holds the
  * decrypted keys in memory and answers a fixed set of requests on stdin/stdout.
  *
- * It has no listening socket and no outbound network except the optional
- * Solana RPC used for simulation. Run it as its own OS user (see docs/SECURITY.md)
+ * It has no listening socket and no outbound network except RPCs: Solana for
+ * simulation, and EVM chains for the transactions it sends itself. Run it as its own OS user (see docs/SECURITY.md)
  * so the agent process cannot read the keystore file.
  */
 import { readFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { readKeystore } from "./keystore.js";
-import { SIGNER_METHODS, type SignerRequest, type SignerResponse } from "./protocol.js";
+import { SIGNER_METHODS, decodeLine, encodeLine, type SignerRequest, type SignerResponse } from "./protocol.js";
 import { SignerRuleError } from "./rules.js";
 import { createSigner, type SignerApi } from "./signer.js";
 
@@ -30,14 +30,15 @@ function main() {
   const signer: SignerApi = createSigner(keys, {
     ...(process.env.FREN_SOLANA_RPC ? { solanaRpcUrl: process.env.FREN_SOLANA_RPC } : {}),
     ...(process.env.FREN_ARBITRUM_RPC ? { arbitrumRpcUrl: process.env.FREN_ARBITRUM_RPC } : {}),
+    ...(process.env.FREN_EVM_RPCS ? { evmRpcUrls: JSON.parse(process.env.FREN_EVM_RPCS) as Record<number, string> } : {}),
   });
 
-  const write = (res: SignerResponse) => process.stdout.write(`${JSON.stringify(res)}\n`);
+  const write = (res: SignerResponse) => process.stdout.write(`${encodeLine(res)}\n`);
   const rl = createInterface({ input: process.stdin });
   rl.on("line", (line) => {
     let req: SignerRequest;
     try {
-      req = JSON.parse(line) as SignerRequest;
+      req = decodeLine(line) as SignerRequest;
     } catch {
       return;
     }

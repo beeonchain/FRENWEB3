@@ -8,3 +8,7 @@ export * from "./venues/types.js";
 export * from "./venues/hyperliquid.js";
 export * from "./venues/hyperliquid-markets.js";
 export * from "./venues/jupiter.js";
+export * from "./bets.js";
+export * from "./venues/derive.js";
+export * from "./venues/polymarket.js";
+export * from "./venues/polymarket-sdk.js";

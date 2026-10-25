@@ -11,6 +11,9 @@ import {
   safeParsePlan,
   snapshotKey,
   signedUsd,
+  tradableKey,
+  chainName,
+  EVM_CHAINS,
   usd as fmtUsd,
   type Condition,
   type Limits,
@@ -22,16 +25,23 @@ import {
   type Venue,
 } from "@fren/core";
 import type { Addresses, SignerApi } from "@fren/signer";
+import { quoteBet, type BetQuery, type BetQuote } from "./bets.js";
 import type { Notifier } from "./notify.js";
 import type { Mode, PendingKind, Store } from "./store.js";
 import type { HyperliquidVenue } from "./venues/hyperliquid.js";
 import type { JupiterVenue } from "./venues/jupiter.js";
-import { VenueError, type PositionView, type VenueAdapter } from "./venues/types.js";
+import type { RelayVenue } from "./venues/relay.js";
+import type { DeriveVenue } from "./venues/derive.js";
+import type { PolymarketVenue } from "./venues/polymarket.js";
+import { VenueError, type PositionView, type SpotVenueAdapter, type VenueAdapter } from "./venues/types.js";
 
 export interface FrenDeps {
   store: Store;
   hyperliquid: HyperliquidVenue;
   jupiter: JupiterVenue;
+  relay: RelayVenue;
+  derive: DeriveVenue;
+  polymarket: PolymarketVenue;
   notifier: Notifier;
   signer: SignerApi | null;
   isTestnet: boolean;
@@ -68,9 +78,14 @@ function newCode(): string {
 export class Fren {
   private readonly venues: Record<Venue, VenueAdapter>;
   private ticking = false;
+  private sniping = false;
 
   constructor(private readonly d: FrenDeps) {
-    this.venues = { hyperliquid: d.hyperliquid, jupiter: d.jupiter };
+    this.venues = { hyperliquid: d.hyperliquid, jupiter: d.jupiter, relay: d.relay, derive: d.derive, polymarket: d.polymarket };
+  }
+
+  private spot(venue: "jupiter" | "relay"): SpotVenueAdapter {
+    return venue === "jupiter" ? this.d.jupiter : this.d.relay;
   }
 
   get store() {
@@ -115,11 +130,15 @@ export class Fren {
   private async canonicalConditions(when: Condition[]): Promise<Condition[]> {
     return Promise.all(
       when.map(async (c) => {
-        if (c.type === "time") return c;
+        if (c.type === "time" || c.type === "tradable") return c;
         if (c.venue === "hyperliquid") {
           const m = await this.d.hyperliquid.markets.get(c.market);
           if (!m) throw new VenueError(`No Hyperliquid market ${c.market} to watch.`);
           return { ...c, market: m.name };
+        }
+        if (c.venue === "relay") throw new VenueError("Price triggers on Base and Robinhood Chain tokens aren't supported yet.");
+        if (c.venue === "derive" || c.venue === "polymarket") {
+          throw new VenueError("Price triggers watch Hyperliquid markets and Solana tokens. For an option or bet, watch the underlying, e.g. ETH on Hyperliquid.");
         }
         if (c.type === "price") return { ...c, market: (await this.d.jupiter.token(c.market)).mint };
         return c;
@@ -186,7 +205,8 @@ export class Fren {
 
   private async executeStep(planId: string, r: ResolvedStep, mode: Mode): Promise<string> {
     try {
-      const res = await this.venues[r.step.leg.venue].execute(r, { mode, planId, idx: r.index });
+      const snipe = r.step.when.some((c) => c.type === "tradable");
+      const res = await this.venues[r.step.leg.venue].execute(r, { mode, planId, idx: r.index, ...(snipe ? { snipe } : {}) });
       this.d.store.setStep(planId, r.index, "filled", res.text);
       return res.text;
     } catch (err) {
@@ -219,6 +239,10 @@ export class Fren {
     if (p.kind === "resume") {
       this.d.store.setLimits({ ...this.limits(), paused: false });
       return "✅ Fren is back on. The watcher is running again.";
+    }
+    if (p.kind === "fund") {
+      const { venue, usd, to } = JSON.parse(p.payload) as { venue: FundVenue; usd: number; to: string };
+      return this.runFunding(venue, usd, to).catch((err: Error) => `❌ ${err.message}`);
     }
     const rec = this.d.store.getPlan(p.payload);
     if (!rec || rec.status !== "pending_confirm") return "That plan is no longer waiting for approval.";
@@ -314,7 +338,49 @@ export class Fren {
     }
     const px = await this.d.jupiter.prices([...mints]).catch(() => new Map<string, number>());
     for (const [mint, v] of px) snap.prices.set(snapshotKey("jupiter", mint), v);
+    snap.tradable = await this.tradableNow();
     return snap;
+  }
+
+  /** Which waiting snipe targets trade right now. Only asks about tokens someone is waiting on. */
+  private async tradableNow(): Promise<Set<string>> {
+    const wanted = new Map<string, { venue: "jupiter" | "relay"; chain: string; token: string }>();
+    for (const p of this.d.store.plansWithStatus("active")) {
+      for (const s of this.d.store.getSteps(p.id)) {
+        if (s.status !== "waiting") continue;
+        for (const c of p.plan.steps[s.idx]?.when ?? []) {
+          if (c.type === "tradable") wanted.set(tradableKey(c.venue, c.chain, c.token), { venue: c.venue, chain: c.chain, token: c.token });
+        }
+      }
+    }
+    const live = new Set<string>();
+    await Promise.all(
+      [...wanted].map(async ([key, w]) => {
+        if (await this.spot(w.venue).isTradable(w.token, w.chain).catch(() => false)) live.add(key);
+      }),
+    );
+    return live;
+  }
+
+  private hasSnipes(): boolean {
+    return this.d.store
+      .plansWithStatus("active")
+      .some((p) => this.d.store.getSteps(p.id).some((s) => s.status === "waiting" && p.plan.steps[s.idx]?.when.some((c) => c.type === "tradable")));
+  }
+
+  /**
+   * The fast loop for launch snipes: every couple of seconds, check only the
+   * steps waiting on a token to start trading. Everything else waits for tick().
+   */
+  async snipeTick(): Promise<void> {
+    if (this.sniping || this.limits().paused || !this.hasSnipes()) return;
+    this.sniping = true;
+    try {
+      const snap: MarketSnapshot = { now: new Date(), prices: new Map(), funding: new Map(), tradable: await this.tradableNow() };
+      await this.fireReady(snap, true);
+    } finally {
+      this.sniping = false;
+    }
   }
 
   /** One watcher pass. Plain code, no LLM: evaluate conditions, fire what's ready, report once each. */
@@ -326,41 +392,52 @@ export class Fren {
       if (limits.paused) return;
       const snap = await this.snapshot();
       await this.paperExits(snap);
-
-      for (const rec of this.d.store.plansWithStatus("active")) {
-        for (const s of this.d.store.getSteps(rec.id)) {
-          if (s.status !== "waiting") continue;
-          const step = rec.plan.steps[s.idx];
-          if (!step) continue;
-          if (step.expiresAt && snap.now.getTime() > new Date(step.expiresAt).getTime()) {
-            this.d.store.setStep(rec.id, s.idx, "expired", "Expired before its conditions were met");
-            await this.d.notifier.alert(`⌛ Expired without firing: ${describeStep(step)}`);
-            continue;
-          }
-          const { statuses, allMet } = evaluateAll(step.when, snap);
-          if (!allMet) continue;
-
-          const { resolved, errors } = await this.resolveAll([step]);
-          const r = resolved[0];
-          if (errors.length || !r) {
-            this.d.store.setStep(rec.id, s.idx, "failed", errors.join("; "));
-            await this.d.notifier.alert(`❌ Conditions met but couldn't fire: ${errors.join("; ")}`);
-            continue;
-          }
-          r.index = s.idx;
-          const decision = evaluatePolicy([r], this.limits(), this.policyState(rec.mode), { preApproved: true });
-          if (decision.verdict === "reject") {
-            this.d.store.setStep(rec.id, s.idx, "rejected", describeDecision(decision, [r]));
-            await this.d.notifier.alert(`❌ Conditions met but your limits blocked it:\n${describeDecision(decision, [r])}`);
-            continue;
-          }
-          const text = await this.executeStep(rec.id, r, rec.mode);
-          await this.d.notifier.alert(`⚡ Triggered\n${statuses.map(describeConditionStatus).join("\n")}\n${text}`);
-        }
-        this.d.store.settlePlan(rec.id);
-      }
+      if (limits.mode === "paper") await this.settlePaperBets();
+      await this.fireReady(snap, false);
     } finally {
       this.ticking = false;
+    }
+  }
+
+  /** Fire every waiting step whose conditions hold in this snapshot. */
+  private async fireReady(snap: MarketSnapshot, snipesOnly: boolean): Promise<void> {
+    for (const rec of this.d.store.plansWithStatus("active")) {
+      for (const s of this.d.store.getSteps(rec.id)) {
+        if (s.status !== "waiting") continue;
+        const step = rec.plan.steps[s.idx];
+        if (!step) continue;
+        if (snipesOnly && !step.when.some((c) => c.type === "tradable")) continue;
+        if (step.expiresAt && snap.now.getTime() > new Date(step.expiresAt).getTime()) {
+          this.d.store.setStep(rec.id, s.idx, "expired", "Expired before its conditions were met");
+          await this.d.notifier.alert(`⌛ Expired without firing: ${describeStep(step)}`);
+          continue;
+        }
+        const { statuses, allMet } = evaluateAll(step.when, snap);
+        if (!allMet) continue;
+        // Claim the step before any await so the fast snipe loop and the
+        // regular watcher can never both fire it.
+        const current = this.d.store.getSteps(rec.id).find((x) => x.idx === s.idx);
+        if (current?.status !== "waiting") continue;
+        this.d.store.setStep(rec.id, s.idx, "pending");
+
+        const { resolved, errors } = await this.resolveAll([step]);
+        const r = resolved[0];
+        if (errors.length || !r) {
+          this.d.store.setStep(rec.id, s.idx, "failed", errors.join("; "));
+          await this.d.notifier.alert(`❌ Conditions met but couldn't fire: ${errors.join("; ")}`);
+          continue;
+        }
+        r.index = s.idx;
+        const decision = evaluatePolicy([r], this.limits(), this.policyState(rec.mode), { preApproved: true });
+        if (decision.verdict === "reject") {
+          this.d.store.setStep(rec.id, s.idx, "rejected", describeDecision(decision, [r]));
+          await this.d.notifier.alert(`❌ Conditions met but your limits blocked it:\n${describeDecision(decision, [r])}`);
+          continue;
+        }
+        const text = await this.executeStep(rec.id, r, rec.mode);
+        await this.d.notifier.alert(`⚡ Triggered\n${statuses.map(describeConditionStatus).join("\n")}\n${text}`);
+      }
+      this.d.store.settlePlan(rec.id);
     }
   }
 
@@ -381,11 +458,73 @@ export class Fren {
     }
   }
 
+  /** Expired paper options and resolved paper bets pay out, like the real venues do. */
+  private async settlePaperBets() {
+    const lines = [
+      ...(await this.d.derive.settlePaper().catch(() => [])),
+      ...(await this.d.polymarket.settlePaper().catch(() => [])),
+    ];
+    for (const l of lines) await this.d.notifier.alert(l);
+  }
+
+  // -- bets ------------------------------------------------------------------------
+
+  /** Quote a price-target bet both ways: an option on Derive and a Polymarket market. */
+  async quoteBet(q: BetQuery, request = ""): Promise<BetQuote> {
+    return quoteBet({ derive: this.d.derive, polymarket: this.d.polymarket }, q, request || `${q.asset} ${q.direction} ${q.target} by ${q.by} with $${q.budgetUsd}`);
+  }
+
+  /**
+   * Move USDC from Arbitrum to Derive or Polymarket. The money leaves for an
+   * address an API gave Fren, so the owner always approves it with a code.
+   */
+  async requestFunding(venue: FundVenue, usd: number): Promise<OwnerRequestResult> {
+    if (!this.d.signer) return { text: "No wallets yet. Run `fren init` first." };
+    if (this.limits().paused) return { text: "Fren is stopped. Send /resume first." };
+    if (this.limits().mode === "paper") return { text: `Paper mode trades ${FUND_NAMES[venue]} from your paper balance; nothing to fund. Switch to live first.` };
+    if (!(usd >= 10)) return { text: `Send at least $10 to ${FUND_NAMES[venue]}.` };
+    const to = await this.fundingAddress(venue);
+    return this.issueCode("fund", JSON.stringify({ venue, usd, to }), `Send ${fmtUsd(usd)} USDC from Arbitrum to your ${FUND_NAMES[venue]} account at ${to}?`);
+  }
+
+  /** Where funding for a venue goes, as that venue's API reports it. */
+  private fundingAddress(venue: FundVenue): Promise<string> {
+    return venue === "derive" ? this.d.derive.depositAddress() : this.d.polymarket.depositWallet();
+  }
+
+  private async runFunding(venue: FundVenue, usd: number, approvedTo: string): Promise<string> {
+    if (this.limits().paused) return "Fren is stopped. Send /resume first.";
+    // The owner approved one address; if the venue now reports another, stop.
+    const to = await this.fundingAddress(venue);
+    if (to.toLowerCase() !== approvedTo.toLowerCase()) {
+      return `❌ ${FUND_NAMES[venue]} now reports a different deposit address (${to}) from the one you approved (${approvedTo}). Nothing was sent.`;
+    }
+    if (venue === "derive") {
+      const { chainId, usdc } = this.d.derive.depositToken;
+      const sent = await this.d.relay.bridgeUsdc({ toChainId: chainId, toCurrency: usdc, recipient: to, usd, where: "your Derive account" });
+      return `${sent}
+Derive credits it once it lands on Ethereum, usually within a few minutes. Your first deposit opens the account.`;
+    }
+    const sent = await this.d.relay.bridgeUsdc({ toChainId: 137, toCurrency: POLYMARKET_PUSD, recipient: to, usd, where: "your Polymarket wallet" });
+    return `${sent}
+It shows up as pUSD in your Polymarket wallet ${to}.`;
+  }
+
   // -- read-only views -----------------------------------------------------------
 
   async positions(): Promise<PositionView[]> {
     const mode = this.limits().mode;
-    const all = (await Promise.all([this.d.hyperliquid.positions(mode), this.d.jupiter.positions(mode)])).flat();
+    const all = (
+      await Promise.all(
+        [this.d.hyperliquid, this.d.jupiter, this.d.relay, this.d.derive, this.d.polymarket].map((v) =>
+          v.positions(mode).catch((err: Error) => {
+            // One venue being down shouldn't hide the others.
+            if (v === this.d.hyperliquid) throw err;
+            return [] as PositionView[];
+          }),
+        ),
+      )
+    ).flat();
     if (mode === "live") this.liveOpenPositions = all.filter((p) => p.kind === "perp").length;
     return all;
   }
@@ -427,10 +566,14 @@ export class Fren {
     const signer = this.d.signer;
     if (!signer) return { text: "No wallets yet. Run `fren init` on the machine Fren runs on.", addresses: null };
     const a = await signer.addresses();
-    const [usdc, hl] = await Promise.all([
+    const [usdc, hl, evm] = await Promise.all([
       this.d.jupiter.usdcBalance().catch(() => null),
       this.d.hyperliquid.accountValueUsd().catch(() => null),
+      this.d.relay.usdcBalances().catch(() => ({}) as Record<string, number>),
     ]);
+    const evmUsdc = Object.entries(evm)
+      .map(([c, v]) => `${fmtUsd(v)} on ${chainName[c] ?? c}`)
+      .join(", ");
     const net = this.d.isTestnet ? " (testnet)" : "";
     const text = [
       "Your Fren wallets. Only this machine holds the keys.",
@@ -441,7 +584,12 @@ export class Fren {
       `EVM / Hyperliquid${net}: ${a.evm}`,
       `  Send USDC on Arbitrum here plus a little ETH for gas, then say "deposit $X to Hyperliquid". Or send USDC straight to this address on Hyperliquid.${hl !== null ? ` Hyperliquid account value: ${fmtUsd(hl)}.` : ""}`,
       "",
+      `  The same address holds tokens on Base and Robinhood Chain. Buys there are paid from USDC on Arbitrum or Base, so keep about $1 of ETH for gas on whichever you fund.${evmUsdc ? ` USDC: ${evmUsdc}.` : ""}`,
+      "",
       `Trading key on Hyperliquid: ${a.hlAgent} (can trade, cannot withdraw).`,
+      "",
+      `Options (Derive) and bets (Polymarket) use the same EVM address. Say "fund Derive with $500" or "fund Polymarket with $500" to move USDC there from Arbitrum.`,
+      ...(a.deriveSession ? [`Trading key on Derive: ${a.deriveSession} (option orders only, cannot withdraw).`] : []),
     ].join("\n");
     return { text, addresses: a };
   }
@@ -455,9 +603,10 @@ export class Fren {
   }
 
   async searchMarkets(query: string): Promise<string> {
-    const [perps, tokens] = await Promise.all([
+    const [perps, tokens, evmTokens] = await Promise.all([
       this.d.hyperliquid.markets.search(query).catch(() => []),
       this.d.jupiter.searchTokens(query).catch(() => []),
+      Promise.all(EVM_CHAINS.map((c) => this.d.relay.searchTokens(c, query).catch(() => []))).then((l) => l.flat()),
     ]);
     const lines: string[] = [];
     if (perps.length) {
@@ -475,6 +624,11 @@ export class Fren {
         lines.push(`• ${t.symbol} (${t.name}) ${t.mint}${t.verified ? " ✔ verified" : " ⚠ unverified"}${t.usdPrice ? `, ${fmtPrice(t.usdPrice)}` : ""}`);
       }
     }
+    const topEvm = evmTokens.sort((a, b) => Number(b.verified) - Number(a.verified)).slice(0, 5);
+    if (topEvm.length) {
+      lines.push('EVM tokens via Relay (venue "relay", set `chain`, use the address as `token`):');
+      for (const t of topEvm) lines.push(`• ${t.symbol} (${t.name}) on ${t.chain}: ${t.address}${t.verified ? " ✔ verified" : " ⚠ unverified"}`);
+    }
     return lines.length ? lines.join("\n") : `Nothing found for "${query}".`;
   }
 
@@ -482,6 +636,11 @@ export class Fren {
     return this.d.store.eventsSince(since);
   }
 }
+
+export type FundVenue = "derive" | "polymarket";
+const FUND_NAMES: Record<FundVenue, string> = { derive: "Derive", polymarket: "Polymarket" };
+/** Polymarket's collateral token on Polygon. */
+const POLYMARKET_PUSD = "0xC011a7E12a19f7B1f670d46F03B03f3342E82DFB";
 
 function pick(o: OwnerRequestResult) {
   return {
@@ -506,5 +665,8 @@ function describePosition(p: PositionView): string {
     const liq = p.liquidationPx ? `, liq ${fmtPrice(p.liquidationPx)}` : "";
     return `${p.side} ${p.size} ${p.symbol} @ ${p.entryPx ? fmtPrice(p.entryPx) : "?"}${p.markPx ? ` (now ${fmtPrice(p.markPx)})` : ""}${pnl}${liq}`;
   }
+  const size = Number(p.size.toFixed(4));
+  if (p.venue === "derive") return `${size} contracts of the ${p.symbol} worth ${fmtUsd(p.valueUsd)}${pnl}`;
+  if (p.venue === "polymarket") return `${size} shares of ${p.symbol} worth ${fmtUsd(p.valueUsd)}${pnl}`;
   return `${p.size} ${p.symbol} worth ${fmtUsd(p.valueUsd)}${pnl}`;
 }

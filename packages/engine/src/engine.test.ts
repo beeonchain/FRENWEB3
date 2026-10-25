@@ -1,31 +1,11 @@
 import { createSigner, generateKeys } from "@fren/signer";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createApi } from "./api.js";
-import { Fren } from "./engine.js";
-import { MemoryNotifier } from "./notify.js";
-import { Store } from "./store.js";
-import { FakeVenues } from "./testing.js";
-import { HyperliquidVenue } from "./venues/hyperliquid.js";
-import { JupiterVenue } from "./venues/jupiter.js";
-
-const HL = "https://hl.test";
-const JUP = "https://jup.test";
+import type { MemoryNotifier } from "./notify.js";
+import { buildTestFren } from "./testing.js";
 
 function setup(opts: { privateLine?: boolean; live?: boolean } = {}) {
-  const fake = new FakeVenues();
-  const store = new Store(":memory:", 10_000);
-  const notifier = new MemoryNotifier(store, opts.privateLine ?? true);
-  const signer = opts.live ? createSigner(generateKeys()) : null;
-  const fren = new Fren({
-    store,
-    notifier,
-    signer,
-    isTestnet: true,
-    hyperliquid: new HyperliquidVenue({ fetchFn: fake.fetch, apiUrl: HL, isTestnet: true, store, signer }),
-    jupiter: new JupiterVenue({ fetchFn: fake.fetch, apiUrl: JUP, solanaRpcUrl: "https://rpc.test", store, signer }),
-  });
-  if (opts.live) store.setLimits({ ...store.getLimits(), mode: "live" });
-  return { fake, store, notifier, fren };
+  return buildTestFren({ ...opts, signer: opts.live ? createSigner(generateKeys()) : null });
 }
 
 const codeFrom = (notifier: MemoryNotifier) => /\/ok ([A-Z0-9]{6})/.exec(notifier.sent.at(-1) ?? "")?.[1] ?? "";
