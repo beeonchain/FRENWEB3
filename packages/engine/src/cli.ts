@@ -8,8 +8,11 @@ import { startDaemon } from "./daemon.js";
 
 const HELP = `fren: self-hosted on-chain trading agent backend
 
-  fren init [--network testnet|mainnet] [--telegram-token T --telegram-chat ID]
+  fren init [--network testnet|mainnet] [--notify whatsapp:+15551234567]
+            [--telegram-token T --telegram-chat ID]
       Create wallets, an API token and a config in $FREN_HOME (default ~/.fren).
+      --notify sends codes and alerts to you on any channel OpenClaw is connected
+      to (whatsapp, telegram, signal, discord...); repeat it for a fallback.
   fren start
       Run the engine: signer process, local API for OpenClaw and the watcher.
   fren wallet
@@ -30,6 +33,7 @@ async function main() {
           network: { type: "string", default: "testnet" },
           "telegram-token": { type: "string" },
           "telegram-chat": { type: "string" },
+          notify: { type: "string", multiple: true },
           "solana-rpc": { type: "string" },
         },
       });
@@ -40,10 +44,16 @@ async function main() {
         writeKeystore(paths.keystore, generateKeys(), readFileSync(paths.passphrase, "utf8").trim());
       }
       const existing = existsSync(paths.config) ? (JSON.parse(readFileSync(paths.config, "utf8")) as Record<string, unknown>) : {};
+      const notify = (values.notify ?? []).map((spec) => {
+        const at = spec.indexOf(":");
+        if (at <= 0 || at === spec.length - 1) throw new Error(`--notify takes channel:target, e.g. whatsapp:+15551234567 (got "${spec}").`);
+        return { channel: spec.slice(0, at).toLowerCase(), to: spec.slice(at + 1) };
+      });
       const config = FrenConfig.parse({
         ...existing,
         network: values.network,
         ...(values["solana-rpc"] ? { solanaRpcUrl: values["solana-rpc"] } : {}),
+        ...(notify.length ? { notify } : {}),
         ...(values["telegram-token"] && values["telegram-chat"]
           ? { telegram: { botToken: values["telegram-token"], ownerChatId: values["telegram-chat"] } }
           : {}),
@@ -57,8 +67,11 @@ EVM / Hyperliquid:  ${a.evm}
 Trading-only key:   ${a.hlAgent}
 
 Next: \`fren start\`, then install the OpenClaw plugin (see README).`);
-      if (!config.telegram) {
-        console.log(`\nTip: add --telegram-token and --telegram-chat so confirmation codes reach you directly, never through the agent.`);
+      const lines = [...(config.telegram ? ["Telegram (direct)"] : []), ...config.notify.map((n) => `${n.channel} ${n.to}`)];
+      if (lines.length) {
+        console.log(`\nCodes and alerts go to: ${lines.join(", then ")}.`);
+      } else {
+        console.log(`\nTip: add --notify whatsapp:+<your number> (or --telegram-token and --telegram-chat) so codes and alerts reach you directly, not through the agent.`);
       }
       return;
     }
