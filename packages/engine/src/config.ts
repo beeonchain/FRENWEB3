@@ -1,6 +1,8 @@
-import { existsSync, readFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { generateKeys, readKeystoreAddresses, writeKeystore } from "@fren/signer";
 import { z } from "zod";
 
 export const FrenConfig = z.object({
@@ -99,4 +101,44 @@ export function deriveApiUrl(cfg: FrenConfig): string {
 /** Jupiter Lend: the keyed API when there's a Jupiter key, else Jupiter's keyless host. */
 export function jupiterLendApiUrl(cfg: FrenConfig): string {
   return cfg.jupiterApiKey ? `${cfg.jupiterApiUrl}/lend/v1` : "https://lite-api.jup.ag/lend/v1";
+}
+
+/** `channel:target`, e.g. whatsapp:+15551234567. */
+export function parseNotify(spec: string): { channel: string; to: string } {
+  const at = spec.indexOf(":");
+  if (at <= 0 || at === spec.length - 1) throw new Error(`--notify takes channel:target, e.g. whatsapp:+15551234567 (got "${spec}").`);
+  return { channel: spec.slice(0, at).toLowerCase(), to: spec.slice(at + 1) };
+}
+
+export interface InitOptions {
+  network?: "mainnet" | "testnet";
+  solanaRpcUrl?: string;
+  jupiterApiKey?: string;
+  /** Replaces the notify list when given and non-empty. */
+  notify?: { channel: string; to: string }[];
+  telegram?: { botToken: string; ownerChatId: string };
+}
+
+/**
+ * Create (or keep) the passphrase, API token and keystore, and merge options
+ * into the config. Existing wallets are never replaced.
+ */
+export function initFren(paths: FrenPaths, opts: InitOptions) {
+  mkdirSync(paths.home, { recursive: true, mode: 0o700 });
+  if (!existsSync(paths.passphrase)) writeFileSync(paths.passphrase, randomBytes(32).toString("base64url"), { mode: 0o600 });
+  if (!existsSync(paths.apiToken)) writeFileSync(paths.apiToken, randomBytes(32).toString("base64url"), { mode: 0o600 });
+  if (!existsSync(paths.keystore)) {
+    writeKeystore(paths.keystore, generateKeys(), readFileSync(paths.passphrase, "utf8").trim());
+  }
+  const existing = existsSync(paths.config) ? (JSON.parse(readFileSync(paths.config, "utf8")) as Record<string, unknown>) : {};
+  const config = FrenConfig.parse({
+    ...existing,
+    ...(opts.network ? { network: opts.network } : {}),
+    ...(opts.solanaRpcUrl ? { solanaRpcUrl: opts.solanaRpcUrl } : {}),
+    ...(opts.jupiterApiKey ? { jupiterApiKey: opts.jupiterApiKey } : {}),
+    ...(opts.notify?.length ? { notify: opts.notify } : {}),
+    ...(opts.telegram ? { telegram: opts.telegram } : {}),
+  });
+  writeFileSync(paths.config, JSON.stringify(config, null, 2), { mode: 0o600 });
+  return { config, addresses: readKeystoreAddresses(paths.keystore) };
 }
