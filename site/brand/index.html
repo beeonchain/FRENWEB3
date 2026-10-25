@@ -1,0 +1,763 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Fren · Brand book</title>
+    <meta name="description" content="How Fren looks, moves and talks: logo, colour, type, components, motion and voice." />
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Geologica:slnt,wght,CRSV,SHRP@-12..0,100..900,0..1,0..100&display=swap"
+    />
+    <link rel="stylesheet" href="../styles.css" />
+    <style>
+      body {
+        font-size: 16px;
+        line-height: 1.5;
+      }
+      .bb-top {
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(10px);
+        border-bottom: 1px solid var(--line);
+        z-index: 10;
+        position: sticky;
+        top: 0;
+      }
+      .bb-top .wrap {
+        justify-content: space-between;
+        align-items: center;
+        height: 64px;
+        display: flex;
+      }
+      .bb-top nav {
+        gap: 18px;
+        font-size: 14px;
+        display: flex;
+      }
+      .bb-top nav a {
+        color: var(--muted);
+        text-decoration: none;
+      }
+      .bb-top nav a:hover {
+        color: var(--ink);
+      }
+      .bb-hero {
+        padding: 96px 0 48px;
+      }
+      .bb-hero h1 {
+        letter-spacing: -0.035em;
+        font-size: clamp(44px, 7vw, 96px);
+        font-weight: 500;
+        line-height: 1.02;
+      }
+      .bb-hero p {
+        color: var(--muted);
+        max-width: 620px;
+        margin-top: 20px;
+        font-size: 20px;
+        font-weight: 300;
+      }
+      .bb-sec {
+        border-top: 1px solid var(--line);
+        padding: 64px 0;
+        scroll-margin-top: 64px;
+      }
+      .bb-sec > .wrap > h2 {
+        letter-spacing: -0.03em;
+        font-size: clamp(30px, 3.6vw, 44px);
+        font-weight: 500;
+      }
+      .bb-lead {
+        color: var(--muted);
+        max-width: 640px;
+        margin-top: 10px;
+        font-size: 17px;
+        font-weight: 300;
+      }
+      .bb-grid {
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 16px;
+        margin-top: 32px;
+        display: grid;
+      }
+      .bb-card {
+        background: var(--soft);
+        border-radius: 22px;
+        padding: 22px;
+      }
+      .bb-card h3 {
+        letter-spacing: -0.02em;
+        font-size: 19px;
+        font-weight: 500;
+      }
+      .bb-card p,
+      .bb-card li {
+        color: var(--muted);
+        font-size: 14px;
+        font-weight: 300;
+      }
+      .bb-card p {
+        margin-top: 6px;
+      }
+      .bb-card ul {
+        margin: 8px 0 0;
+        padding-left: 18px;
+      }
+      .stage {
+        border-radius: 22px;
+        place-items: center;
+        min-height: 220px;
+        padding: 32px;
+        display: grid;
+      }
+      .stage--paper {
+        background: var(--bg);
+        border: 1px solid var(--line);
+      }
+      .stage--ink {
+        background: var(--ink);
+        color: var(--bg);
+      }
+      .stage--blue {
+        background: var(--blue);
+      }
+      .stage--soft {
+        background: var(--soft);
+      }
+      .stage svg {
+        width: min(100%, 260px);
+        height: auto;
+      }
+      .stage--mark svg {
+        width: 110px;
+      }
+      .cap {
+        color: var(--muted);
+        justify-content: space-between;
+        gap: 12px;
+        margin-top: 10px;
+        font-size: 13px;
+        display: flex;
+      }
+      .cap a {
+        color: var(--ink);
+      }
+      .swatch {
+        border-radius: 22px;
+        overflow: hidden;
+        border: 1px solid var(--line);
+      }
+      .swatch__chip {
+        height: 120px;
+      }
+      .swatch__meta {
+        background: var(--bg);
+        padding: 14px 16px 16px;
+      }
+      .swatch__meta b {
+        font-weight: 500;
+        display: block;
+      }
+      .swatch__meta span {
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 300;
+        display: block;
+      }
+      .swatch__meta code,
+      .bb code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 13px;
+      }
+      .ratio {
+        border: 1px solid var(--ink);
+        border-radius: 12px;
+        height: 28px;
+        margin-top: 24px;
+        display: flex;
+        overflow: hidden;
+      }
+      .type-row {
+        border-bottom: 1px solid var(--line);
+        grid-template-columns: 180px 1fr;
+        align-items: baseline;
+        gap: 24px;
+        padding: 22px 0;
+        display: grid;
+      }
+      .type-row small {
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 300;
+        line-height: 1.5;
+      }
+      .demo-row {
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 16px;
+        display: flex;
+      }
+      .bub-you,
+      .bub-fren {
+        border-radius: 18px;
+        max-width: 260px;
+        padding: 10px 14px;
+        font-size: 15px;
+      }
+      .bub-you {
+        background: var(--blue);
+        border-bottom-right-radius: 6px;
+        margin-left: auto;
+      }
+      .bub-fren {
+        background: var(--ink);
+        color: var(--bg);
+        border-bottom-left-radius: 6px;
+      }
+      .bub-fren small {
+        color: #b9b9b9;
+        margin-top: 6px;
+        font-size: 12px;
+        display: block;
+      }
+      .chatdemo {
+        background: var(--bg);
+        border: 1px solid var(--line);
+        border-radius: 22px;
+        flex-direction: column;
+        gap: 10px;
+        width: 100%;
+        max-width: 340px;
+        padding: 18px;
+        display: flex;
+      }
+      .dots-demo {
+        background-image: radial-gradient(var(--faint) 1.4px, transparent 1.4px);
+        background-size: 18px 18px;
+        border-radius: 22px;
+        height: 160px;
+      }
+      .do-dont {
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin-top: 32px;
+        display: grid;
+      }
+      .do-dont > div {
+        border-radius: 22px;
+        padding: 22px;
+      }
+      .do {
+        background: var(--soft);
+      }
+      .dont {
+        border: 1px dashed var(--faint);
+      }
+      .do-dont h3 {
+        font-size: 15px;
+        font-weight: 600;
+      }
+      .do-dont ul {
+        margin: 10px 0 0;
+        padding-left: 18px;
+      }
+      .do-dont li {
+        margin-top: 6px;
+        font-size: 15px;
+        font-weight: 300;
+      }
+      .gloss {
+        border-collapse: collapse;
+        width: 100%;
+        margin-top: 28px;
+        font-size: 15px;
+      }
+      .gloss th,
+      .gloss td {
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
+        padding: 12px 12px 12px 0;
+      }
+      .gloss th {
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 400;
+      }
+      .gloss td:first-child {
+        white-space: nowrap;
+        font-weight: 500;
+      }
+      .gloss td {
+        font-weight: 300;
+      }
+      .copybank p {
+        border-left: 3px solid var(--blue);
+        margin-top: 14px;
+        padding-left: 14px;
+        font-size: 17px;
+      }
+      .copybank small {
+        color: var(--muted);
+        margin-top: 2px;
+        font-size: 13px;
+        font-weight: 300;
+        display: block;
+      }
+      .eye-demo .pupil {
+        transition: cx 0.4s var(--ease);
+      }
+      @media (width<=700px) {
+        .bb-top nav {
+          display: none;
+        }
+        .type-row,
+        .do-dont {
+          grid-template-columns: 1fr;
+        }
+        .gloss td:first-child {
+          white-space: normal;
+        }
+      }
+    </style>
+  </head>
+  <body class="bb">
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <path id="fren-head" d="M76 0C98.0914 0 116 17.9086 116 40C116 62.0914 98.0914 80 76 80H52C47.0684 80 42.5304 77.306 40.1689 72.9766L32 58H44C44 58 48 58 48 54C48 50 44 50 44 50H37.0586C31.4386 49.9998 26.2304 47.0506 23.3389 42.2314L16 30H44C44 30 48 30 48 26C48 22 44 22 44 22H21.498C15.6432 22 10.2559 18.802 7.45215 13.6621L0 0H76ZM84 24C75.1634 24 68 31.1634 68 40C68 48.8366 75.1634 56 84 56C92.8366 56 100 48.8366 100 40C100 31.1634 92.8366 24 84 24Z" />
+        <path id="fren-word" d="M254.516 22.8878C258.804 22.8878 262.628 23.6605 265.988 25.2045C269.348 26.7164 272.116 28.8394 274.292 31.5736C276.5 34.2757 278.021 37.4761 278.853 41.1754C279.685 44.8425 279.717 48.8316 278.949 53.142H242.179C242.211 55.0719 242.787 56.761 243.907 58.2084C245.027 59.6559 246.563 60.7972 248.515 61.6335C250.467 62.4376 252.739 62.8399 255.331 62.84C258.211 62.84 260.948 62.4705 263.54 61.7307C266.132 60.9587 268.612 59.7846 270.98 58.2084L275.925 68.9195C274.421 70.0775 272.468 71.1231 270.068 72.056C267.7 72.9566 265.172 73.6646 262.484 74.1793C259.828 74.7262 257.284 75 254.852 75C249.475 75 244.755 73.9216 240.691 71.7664C236.627 69.579 233.458 66.5396 231.186 62.6476C228.914 58.7231 227.778 54.1386 227.778 48.8953C227.778 45.0996 228.434 41.6092 229.746 38.4247C231.09 35.2402 232.946 32.4898 235.314 30.1738C237.714 27.8578 240.531 26.0722 243.763 24.8177C247.027 23.5311 250.612 22.8878 254.516 22.8878ZM184.259 20.6201H155.937V34.5648H181.283V48.6057H155.937V73.552H140V6H184.259V20.6201ZM222.44 22.7916C223.528 22.7916 224.504 22.8563 225.368 22.9849C226.232 23.1136 227.081 23.258 227.912 23.4188L226.04 39.6793C224.952 39.2934 223.8 38.9876 222.584 38.7624C221.368 38.5052 220.152 38.3766 218.936 38.3766C215.96 38.3766 213.496 39.2452 211.544 40.982C209.624 42.6869 208.663 45.1963 208.663 48.5095V73.552H192.919V24.3357H208.663V30.0776C210.135 27.5364 212.088 25.6872 214.52 24.5291C216.952 23.3711 219.592 22.7916 222.44 22.7916ZM315.887 22.8878C320.496 22.8878 324.288 23.8049 327.264 25.6384C330.24 27.4397 332.432 29.7881 333.84 32.6829C335.28 35.5458 336 38.5859 336 41.8027V73.552H320.255V46.7729C320.255 43.8136 319.471 41.4814 317.903 39.7765C316.367 38.0716 314.095 37.2192 311.086 37.2192C309.166 37.2193 307.486 37.6365 306.046 38.4728C304.638 39.3092 303.534 40.5002 302.734 42.0442C301.934 43.556 301.534 45.2928 301.534 47.2549V73.552H285.789V24.3357H301.534V29.5465C303.358 27.2305 305.519 25.5415 308.015 24.48C310.511 23.4186 313.135 22.8878 315.887 22.8878ZM254.083 34.3233C251.043 34.3234 248.515 35.0632 246.499 36.5429C244.515 38.0225 243.395 40.0013 243.139 42.4781H263.972C263.908 40.0012 262.996 38.0226 261.236 36.5429C259.476 35.0633 257.091 34.3233 254.083 34.3233Z" />
+      </defs>
+    </svg>
+    <header class="bb-top">
+      <div class="wrap">
+        <a href="../" aria-label="Fren home"
+          ><svg width="84" height="20" viewBox="0 0 336 80" fill="currentColor" role="img" aria-label="Fren">
+            <use href="#fren-head" />
+            <circle cx="92" cy="40" r="8" />
+            <use href="#fren-word" /></svg
+        ></a>
+        <nav aria-label="Sections">
+          <a href="#logo">Logo</a><a href="#colour">Colour</a><a href="#type">Type</a><a href="#parts">Parts</a
+          ><a href="#motion">Motion</a><a href="#voice">Voice</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section class="bb-hero">
+        <div class="wrap">
+          <h1>The <span class="plq">Fren</span> brand book</h1>
+          <p>
+            How Fren looks, moves and talks. Fren is a trading agent that lives in your chats: fun on the surface,
+            strict about safety underneath. Everything here comes from the launch site, so use it as the source of
+            truth.
+          </p>
+        </div>
+      </section>
+
+      <section class="bb-sec" id="logo">
+        <div class="wrap">
+          <h2>Logo</h2>
+          <p class="bb-lead">
+            The mark is Fren's head: a speedy, winged shape with one big eye. The wordmark sits to its right. Use
+            the full logo by default and the mark alone where space is tight (avatars, favicons, stickers).
+          </p>
+          <div class="bb-grid">
+            <div>
+              <div class="stage stage--paper">
+                <svg viewBox="0 0 336 80" fill="#000" aria-label="Fren logo, black">
+                  <use href="#fren-head" />
+                  <circle cx="92" cy="40" r="8" />
+                  <use href="#fren-word" />
+                </svg>
+              </div>
+              <div class="cap">
+                <span>Primary · black on white</span><a href="../assets/fren-logo-black.svg" download>SVG</a>
+              </div>
+            </div>
+            <div>
+              <div class="stage stage--ink">
+                <svg viewBox="0 0 336 80" fill="#fff" aria-label="Fren logo, white">
+                  <use href="#fren-head" />
+                  <circle cx="92" cy="40" r="8" />
+                  <use href="#fren-word" />
+                </svg>
+              </div>
+              <div class="cap">
+                <span>Reversed · white on black</span><a href="../assets/fren-logo-white.svg" download>SVG</a>
+              </div>
+            </div>
+            <div>
+              <div class="stage stage--blue stage--mark">
+                <svg viewBox="0 0 116 80" fill="#000" aria-label="Fren mark">
+                  <use href="#fren-head" />
+                  <circle cx="92" cy="40" r="8" />
+                </svg>
+              </div>
+              <div class="cap">
+                <span>Mark · on Fren Blue</span
+                ><span><a href="../assets/fren-mark-black.svg" download>Black</a> · <a href="../assets/fren-mark-white.svg" download>White</a></span>
+              </div>
+            </div>
+          </div>
+          <div class="bb-grid">
+            <div class="bb-card">
+              <h3>Clear space</h3>
+              <p>Keep empty space around the logo at least as tall as the eye (the circle inside the head).</p>
+            </div>
+            <div class="bb-card">
+              <h3>Minimum size</h3>
+              <p>Full logo: 72px wide on screen. Mark alone: 16px wide (favicon size).</p>
+            </div>
+            <div class="bb-card">
+              <h3>Colours</h3>
+              <p>Only black or white. Put it on white, black, Fren Blue or Soft grey. Never in blue on blue.</p>
+            </div>
+            <div class="bb-card">
+              <h3>Don't</h3>
+              <ul>
+                <li>Stretch, rotate or outline it</li>
+                <li>Add gradients, glows or drop shadows</li>
+                <li>Swap the wordmark for a typed "Fren"</li>
+                <li>Flip the head to face left</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="bb-sec" id="mascot">
+        <div class="wrap">
+          <h2>The eye is alive</h2>
+          <p class="bb-lead">
+            Fren's eye is its personality. On screen it follows your cursor, blinks every few seconds, and says "gm"
+            when the site loads. When the kill switch is on, the eye stops following you. Keep the eye animated
+            wherever you can; a still Fren should still look like it is paying attention.
+          </p>
+          <div class="bb-grid">
+            <div class="stage stage--soft stage--mark eye-demo">
+              <svg viewBox="0 0 116 80" fill="#000" aria-label="Fren mark looking around">
+                <use href="#fren-head" />
+                <circle class="pupil" cx="92" cy="40" r="8" />
+                <ellipse class="lid" cx="84" cy="40" rx="16.5" ry="16.5" />
+              </svg>
+            </div>
+            <div class="bb-card">
+              <h3>Behaviour</h3>
+              <ul>
+                <li>Pupil moves up to 8 units toward the cursor</li>
+                <li>Blinks every 6 seconds</li>
+                <li>Pupil rests looking right, toward the wordmark</li>
+                <li>Says "gm" on first load, then types its first message</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="bb-sec" id="colour">
+        <div class="wrap">
+          <h2>Colour</h2>
+          <p class="bb-lead">
+            Mostly black and white, with one blue that means "you" and "go". Blue is for your chat bubbles, buttons
+            and the highlight behind key words. Fren itself speaks in black.
+          </p>
+          <div class="bb-grid">
+            <div class="swatch">
+              <div class="swatch__chip" style="background: #000"></div>
+              <div class="swatch__meta">
+                <b>Ink</b><span><code>#000000</code> · <code>--ink</code></span><span>Text, outlines, Fren's bubbles</span>
+              </div>
+            </div>
+            <div class="swatch">
+              <div class="swatch__chip" style="background: #fff"></div>
+              <div class="swatch__meta">
+                <b>Paper</b><span><code>#FFFFFF</code> · <code>--bg</code></span><span>Backgrounds</span>
+              </div>
+            </div>
+            <div class="swatch">
+              <div class="swatch__chip" style="background: #a5caff"></div>
+              <div class="swatch__meta">
+                <b>Fren Blue</b><span><code>#A5CAFF</code> · <code>--blue</code></span
+                ><span>Buttons, your bubbles, highlights</span>
+              </div>
+            </div>
+            <div class="swatch">
+              <div class="swatch__chip" style="background: #f5f5f5"></div>
+              <div class="swatch__meta">
+                <b>Soft</b><span><code>#F5F5F5</code> · <code>--soft</code></span><span>Cards and tiles</span>
+              </div>
+            </div>
+          </div>
+          <div class="bb-grid">
+            <div class="swatch">
+              <div class="swatch__chip" style="background: #5e5e5e; height: 56px"></div>
+              <div class="swatch__meta">
+                <b>Muted</b><span><code>#5E5E5E</code> · <code>--muted</code></span><span>Secondary text</span>
+              </div>
+            </div>
+            <div class="swatch">
+              <div class="swatch__chip" style="background: #cfcfcf; height: 56px"></div>
+              <div class="swatch__meta">
+                <b>Faint</b><span><code>#CFCFCF</code> · <code>--faint</code></span><span>Dot grids, disabled</span>
+              </div>
+            </div>
+            <div class="swatch">
+              <div class="swatch__chip" style="background: #e3e3e3; height: 56px"></div>
+              <div class="swatch__meta">
+                <b>Line</b><span><code>#E3E3E3</code> · <code>--line</code></span><span>Dividers, borders</span>
+              </div>
+            </div>
+            <div class="swatch">
+              <div class="swatch__chip" style="background: #efefef; height: 56px"></div>
+              <div class="swatch__meta">
+                <b>Voice</b><span><code>#EFEFEF</code> · <code>--voice</code></span
+                ><span>Fren's floating speech bubbles</span>
+              </div>
+            </div>
+          </div>
+          <div class="ratio" aria-label="Rough colour balance: 70% paper, 15% ink, 10% soft, 5% blue">
+            <span style="flex: 70; background: #fff"></span><span style="flex: 15; background: #000"></span
+            ><span style="flex: 10; background: #f5f5f5"></span><span style="flex: 5; background: #a5caff"></span>
+          </div>
+          <div class="cap"><span>Rough balance: 70% paper, 15% ink, 10% soft, 5% blue.</span></div>
+        </div>
+      </section>
+
+      <section class="bb-sec" id="type">
+        <div class="wrap">
+          <h2>Type</h2>
+          <p class="bb-lead">
+            One family: <b>Geologica</b> (Google Fonts, free). Headlines are Medium with tight tracking, body text is
+            Light. Numbers in receipts and codes are SemiBold with tabular figures.
+          </p>
+          <div style="margin-top: 24px">
+            <div class="type-row">
+              <small>Display<br />Medium 500 · −3.5% · 1.02<br />56–112px</small>
+              <div style="font-size: clamp(40px, 6vw, 78px); font-weight: 500; letter-spacing: -0.035em; line-height: 1.02">
+                Get your Fren →
+              </div>
+            </div>
+            <div class="type-row">
+              <small>Heading<br />Medium 500 · −3% · 1.1<br />30–52px</small>
+              <div style="font-size: clamp(28px, 3.6vw, 44px); font-weight: 500; letter-spacing: -0.03em; line-height: 1.1">
+                Behind the vibes there's a strict safety layer.
+              </div>
+            </div>
+            <div class="type-row">
+              <small>Title<br />Medium 500 · −2%<br />19–28px</small>
+              <div style="font-size: 22px; font-weight: 500; letter-spacing: -0.02em">Confirm codes</div>
+            </div>
+            <div class="type-row">
+              <small>Body<br />Light 300 · 1.5<br />14–20px</small>
+              <div style="font-size: 18px; font-weight: 300; color: var(--muted); max-width: 560px">
+                Text it on Telegram or WhatsApp. Fren handles perps, memes, options and bets for you, and your keys
+                never leave your box.
+              </div>
+            </div>
+            <div class="type-row">
+              <small>Numbers<br />SemiBold 600 · tabular</small>
+              <div style="font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: 0.12em">
+                4821
+              </div>
+            </div>
+          </div>
+          <div class="bb-grid">
+            <div class="bb-card">
+              <h3>The highlight</h3>
+              <p style="margin-top: 14px; font-size: 32px; font-weight: 500; color: var(--ink); letter-spacing: -0.03em">
+                Text it to <span class="plq">trade</span>
+              </p>
+              <p>One key word per headline sits on a Fren Blue plaque that wobbles gently. Never more than one.</p>
+            </div>
+            <div class="bb-card">
+              <h3>Case</h3>
+              <p>
+                Sentence case everywhere, including buttons. "Fren" always has a capital F. Use real typographic
+                quotes and apostrophes (’ “ ”).
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="bb-sec" id="parts">
+        <div class="wrap">
+          <h2>Parts</h2>
+          <p class="bb-lead">
+            Few parts, used the same way every time. Outlines are 1px ink, shadows are hard and offset (never
+            blurry), corners are round.
+          </p>
+          <div class="bb-grid">
+            <div class="bb-card">
+              <h3>Button</h3>
+              <div class="demo-row" style="margin-top: 18px">
+                <a class="btn" href="#parts">Get your Fren</a><a class="btn btn--sm" href="#parts">Small</a>
+              </div>
+              <p style="margin-top: 16px">
+                Fren Blue, 1px ink border, 12px radius, hard 2×3px ink shadow. On hover it presses down into its
+                shadow.
+              </p>
+            </div>
+            <div class="bb-card">
+              <h3>Chat</h3>
+              <div class="chatdemo" style="margin-top: 18px">
+                <div class="bub-you">Short SOL if funding goes above 0.02%</div>
+                <div class="bub-fren">
+                  Got it. I'll short SOL the moment it does.<small>Watching · SOL · Short · funding &gt; 0.02%</small>
+                </div>
+              </div>
+              <p style="margin-top: 16px">
+                You are blue on the right. Fren is black on the left and ends with a small receipt line.
+              </p>
+            </div>
+            <div class="bb-card">
+              <h3>Tile and dot grid</h3>
+              <div class="dots-demo" style="margin-top: 18px"></div>
+              <p style="margin-top: 16px">Tiles are Soft grey with 22px corners. The faint dot grid fills empty space behind the phone.</p>
+            </div>
+          </div>
+          <div class="bb-grid">
+            <div class="bb-card">
+              <h3>Radii</h3>
+              <p>8px small controls · 12px buttons and inputs · 18px bubbles · 22px cards · 48px phone</p>
+            </div>
+            <div class="bb-card">
+              <h3>Shadows</h3>
+              <p>Small 1.5×2px · Button 2×3px · Card 4×5px. Always solid ink, never blurred.</p>
+            </div>
+            <div class="bb-card">
+              <h3>Layout</h3>
+              <p>Max width 1120px, 24px side padding, 16px gaps between cards.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="bb-sec" id="motion">
+        <div class="wrap">
+          <h2>Motion</h2>
+          <p class="bb-lead">
+            Things move like they have a little weight and a lot of mood: a quick ease out, a small overshoot, then
+            rest. Everything respects "reduce motion".
+          </p>
+          <div class="bb-grid">
+            <div class="bb-card">
+              <h3>Ease</h3>
+              <p><code>cubic-bezier(.2,.8,.2,1)</code><br />Fades, slides and scroll scenes.</p>
+            </div>
+            <div class="bb-card">
+              <h3>Spring</h3>
+              <p><code>cubic-bezier(.34,1.4,.64,1)</code><br />Tiles, bubbles and icons popping in.</p>
+            </div>
+            <div class="bb-card">
+              <h3>Signature moves</h3>
+              <ul>
+                <li>Blink every 6s</li>
+                <li>Highlight wobbles ±1° over 2.6s</li>
+                <li>Typing dots before Fren replies</li>
+                <li>Buttons press into their shadow</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="bb-sec" id="voice">
+        <div class="wrap">
+          <h2>Voice</h2>
+          <p class="bb-lead">
+            Fren talks like a sharp friend who trades: short, warm, a bit cheeky, never pushy. It says what it did,
+            in one message, and it is dead serious when money or safety is on the line.
+          </p>
+          <div class="do-dont">
+            <div class="do">
+              <h3>Do</h3>
+              <ul>
+                <li>Keep it short: "Done. You're long gold at 20x."</li>
+                <li>Talk like chat: contractions, "gm", plain words</li>
+                <li>Say what happened, then the receipt</li>
+                <li>Be exact about safety: caps, codes, kill switch</li>
+                <li>Say "your box" and "your keys"</li>
+              </ul>
+            </div>
+            <div class="dont">
+              <h3>Don't</h3>
+              <ul>
+                <li>Promise profits, "guaranteed" or "risk-free"</li>
+                <li>Sound like a bank or a press release</li>
+                <li>Name the tech underneath (frameworks, models, vendors)</li>
+                <li>Use more than one emoji, or any in safety copy</li>
+                <li>Call it a bot. It's your Fren.</li>
+              </ul>
+            </div>
+          </div>
+          <table class="gloss">
+            <thead>
+              <tr>
+                <th>Say</th>
+                <th>Meaning</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Your box</td>
+                <td>The computer or VPS the user owns, where Fren and the keys live</td>
+              </tr>
+              <tr>
+                <td>Your caps</td>
+                <td>The user's own limits: size per trade, per day, leverage</td>
+              </tr>
+              <tr>
+                <td>Confirm code</td>
+                <td>The code Fren sends for anything big; the AI never sees it</td>
+              </tr>
+              <tr>
+                <td>Kill switch</td>
+                <td>One message that stops everything</td>
+              </tr>
+              <tr>
+                <td>"Say when" orders</td>
+                <td>Trades that fire when a condition hits</td>
+              </tr>
+              <tr>
+                <td>Paper mode</td>
+                <td>Practice trades at real prices with no real money</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="bb-card copybank" style="margin-top: 32px">
+            <h3>Copy bank</h3>
+            <p>Your trading <b>Fren</b> lives in your chats.<small>Headline</small></p>
+            <p>
+              Text it on Telegram or WhatsApp. Fren handles perps, memes, options and bets for you, and your keys
+              never leave your box.<small>Subhead</small>
+            </p>
+            <p>Behind the vibes there's a strict safety layer.<small>Safety intro</small></p>
+            <p>Self-custody · Your caps · Confirm codes · Kill switch<small>Trust strip</small></p>
+            <p>Get your Fren →<small>Main call to action</small></p>
+            <p>gm! I'm Fren. What are we trading today?<small>First hello</small></p>
+          </div>
+        </div>
+      </section>
+    </main>
+    <footer class="foot wrap"><span>© 2026 Fren</span> <a href="../">Back to the site</a></footer>
+    <script>
+      (() => {
+        if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+        const p = document.querySelector(".eye-demo .pupil"),
+          seq = [[92, 40], [76, 40], [84, 32], [84, 48], [92, 40]];
+        let i = 0;
+        setInterval(() => {
+          i = (i + 1) % seq.length;
+          p.setAttribute("cx", seq[i][0]);
+          p.setAttribute("cy", seq[i][1]);
+        }, 900);
+      })();
+    </script>
+  </body>
+</html>
