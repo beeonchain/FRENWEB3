@@ -30,7 +30,21 @@ The model thinks, but it never signs and never polls. Anything that spends over 
 | `packages/engine` | The `fren` CLI and daemon: venues, watcher, SQLite state, local API. |
 | `packages/openclaw-plugin` | The OpenClaw plugin: agent tools, owner commands, and the skill that teaches the agent the grammar. |
 
-## Quick start
+## Install
+
+On your own Mac or Linux machine (Windows: inside WSL):
+
+```bash
+curl -fsSL https://getfren.netlify.app/install.sh | bash
+```
+
+It installs Node and OpenClaw if they're missing, downloads and builds Fren, then runs `fren setup`, which asks a few questions: your AI model login, Telegram or WhatsApp (you become the bot's only allowed sender and owner; on Telegram it finds your user id when you press Start), mainnet or testnet, and an optional Jupiter key. It then creates the wallets, installs the plugin and starts Fren in the background. Run `fren setup` again any time; it keeps your wallets.
+
+**On a VPS, with no terminal at all:** [getfren.netlify.app/vps](https://getfren.netlify.app/vps/). You enter an email and pay the server ($10/month at EQVPS: no KYC, USDC/USDT or card). The site then SSHes in once with a one-time key, runs the installer with `--server --web`, and deletes that key. The server runs Fren as its own `fren` user under systemd, and serves a private HTTPS setup page at `https://<ip>.sslip.io/setup` with a one-time link. On that page you paste an AI API key, connect Telegram or WhatsApp (the QR code shows in the page), create wallets and download a backup. Pressing "Start Fren" starts the engine and gateway and shuts the setup page down. The wizard's functions live in `site/netlify/functions`.
+
+On a VPS where you do have a shell: `curl -fsSL https://getfren.netlify.app/install.sh | bash -s -- --server`.
+
+## Quick start by hand
 
 Needs Node 24.16+ and OpenClaw 2026.10.5+.
 
@@ -48,7 +62,7 @@ node packages/engine/dist/cli.js init --network testnet --notify whatsapp:+15551
 node packages/engine/dist/cli.js start
 
 # In another terminal: install the plugin into OpenClaw
-openclaw plugins install --link --accept-capabilities ./packages/openclaw-plugin
+openclaw plugins install --link --accept-capabilities --force ./packages/openclaw-plugin
 ```
 
 For snipes, get a free Jupiter API key at portal.jup.ag and put it in `~/.fren/config.json` as `jupiterApiKey`; without one Jupiter allows about one request every two seconds.
