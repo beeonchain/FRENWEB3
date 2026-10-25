@@ -1,0 +1,10 @@
+{
+  "name": "fren-site",
+  "private": true,
+  "type": "module",
+  "description": "getfren.netlify.app: static site in public/, VPS wizard functions in netlify/functions/.",
+  "dependencies": {
+    "@netlify/blobs": "^11.1.0",
+    "ssh2": "^1.17.0"
+  }
+}
