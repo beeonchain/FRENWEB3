@@ -14,6 +14,8 @@ export const FrenConfig = z.object({
   /** Relay API, for tokens on Base, Robinhood Chain and Arbitrum. */
   relayApiUrl: z.string().url().optional(),
   relayApiKey: z.string().optional(),
+  /** Kamino's API, for USDC lending rates and transactions. */
+  kaminoApiUrl: z.string().url().default("https://api.kamino.finance"),
   /** Derive (options) API base; defaults to mainnet or testnet by network. */
   deriveApiUrl: z.string().url().optional(),
   /** RPC overrides for EVM chains. */
@@ -29,9 +31,19 @@ export const FrenConfig = z.object({
   /**
    * Direct line to the owner for confirmation codes and watcher alerts. Uses the
    * same bot as OpenClaw's Telegram channel; Fren only calls sendMessage, so it
-   * does not compete with OpenClaw for updates.
+   * does not compete with OpenClaw for updates. Tried before `notify`.
    */
   telegram: z.object({ botToken: z.string().min(10), ownerChatId: z.string().min(1) }).optional(),
+  /**
+   * Reach the owner on any channel the OpenClaw gateway is connected to, such as
+   * WhatsApp: { channel: "whatsapp", to: "+15551234567" }. Tried in order, after
+   * `telegram`; the first that works gets the message.
+   */
+  notify: z
+    .array(z.object({ channel: z.string().min(1), to: z.string().min(1), account: z.string().min(1).optional() }))
+    .default([]),
+  /** The OpenClaw CLI, for `notify`. */
+  openclawBin: z.string().default("openclaw"),
   watcherIntervalMs: z.number().int().min(2000).default(15_000),
   /** How often launch snipes check whether their token trades yet. */
   snipeIntervalMs: z.number().int().min(500).default(2_000),
@@ -82,4 +94,9 @@ export function hyperliquidApiUrl(cfg: FrenConfig): string {
 export function deriveApiUrl(cfg: FrenConfig): string {
   if (cfg.deriveApiUrl) return cfg.deriveApiUrl;
   return cfg.network === "mainnet" ? "https://api.derive.xyz/v3" : "https://testnet.api.derive.xyz/v3";
+}
+
+/** Jupiter Lend: the keyed API when there's a Jupiter key, else Jupiter's keyless host. */
+export function jupiterLendApiUrl(cfg: FrenConfig): string {
+  return cfg.jupiterApiKey ? `${cfg.jupiterApiUrl}/lend/v1` : "https://lite-api.jup.ag/lend/v1";
 }

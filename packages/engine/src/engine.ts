@@ -33,6 +33,7 @@ import type { JupiterVenue } from "./venues/jupiter.js";
 import type { RelayVenue } from "./venues/relay.js";
 import type { DeriveVenue } from "./venues/derive.js";
 import type { PolymarketVenue } from "./venues/polymarket.js";
+import type { CashChain, YieldVenue } from "./venues/yield.js";
 import { VenueError, type PositionView, type SpotVenueAdapter, type VenueAdapter } from "./venues/types.js";
 
 export interface FrenDeps {
@@ -42,6 +43,7 @@ export interface FrenDeps {
   relay: RelayVenue;
   derive: DeriveVenue;
   polymarket: PolymarketVenue;
+  yield: YieldVenue;
   notifier: Notifier;
   signer: SignerApi | null;
   isTestnet: boolean;
@@ -81,7 +83,7 @@ export class Fren {
   private sniping = false;
 
   constructor(private readonly d: FrenDeps) {
-    this.venues = { hyperliquid: d.hyperliquid, jupiter: d.jupiter, relay: d.relay, derive: d.derive, polymarket: d.polymarket };
+    this.venues = { hyperliquid: d.hyperliquid, jupiter: d.jupiter, relay: d.relay, derive: d.derive, polymarket: d.polymarket, yield: d.yield };
   }
 
   private spot(venue: "jupiter" | "relay"): SpotVenueAdapter {
@@ -206,14 +208,32 @@ export class Fren {
   private async executeStep(planId: string, r: ResolvedStep, mode: Mode): Promise<string> {
     try {
       const snipe = r.step.when.some((c) => c.type === "tradable");
+      const topUp = await this.topUpFromYield(r, mode);
       const res = await this.venues[r.step.leg.venue].execute(r, { mode, planId, idx: r.index, ...(snipe ? { snipe } : {}) });
-      this.d.store.setStep(planId, r.index, "filled", res.text);
-      return res.text;
+      const text = topUp ? `${topUp}\n${res.text}` : res.text;
+      this.d.store.setStep(planId, r.index, "filled", text);
+      return text;
     } catch (err) {
       const msg = `❌ ${describeStep(r.step, r)}: ${(err as Error).message}`;
       this.d.store.setStep(planId, r.index, "failed", msg);
       return msg;
     }
+  }
+
+  /**
+   * A trade that spends USDC the wallet doesn't have idle takes it back from
+   * lending first. Failing to top up isn't fatal: the trade then fails or
+   * succeeds on its own terms, as it would without yield.
+   */
+  private async topUpFromYield(r: ResolvedStep, mode: Mode): Promise<string | null> {
+    if (r.spendUsd <= 0 || r.step.leg.kind === "earn") return null;
+    const venue = r.step.leg.venue;
+    let where: CashChain | "evm" | "paper" | null = null;
+    if (mode === "paper") where = "paper";
+    else if (venue === "jupiter") where = "solana";
+    else if (venue === "relay") where = "evm";
+    if (!where) return null;
+    return this.d.yield.ensureCash(where, r.spendUsd, mode).catch(() => null);
   }
 
   // -- owner approvals -----------------------------------------------------
@@ -512,11 +532,16 @@ It shows up as pUSD in your Polymarket wallet ${to}.`;
 
   // -- read-only views -----------------------------------------------------------
 
+  /** USDC lending rates and what's lent out where. */
+  async yieldRates(): Promise<string> {
+    return this.d.yield.ratesText(this.limits().mode);
+  }
+
   async positions(): Promise<PositionView[]> {
     const mode = this.limits().mode;
     const all = (
       await Promise.all(
-        [this.d.hyperliquid, this.d.jupiter, this.d.relay, this.d.derive, this.d.polymarket].map((v) =>
+        [this.d.hyperliquid, this.d.jupiter, this.d.relay, this.d.derive, this.d.polymarket, this.d.yield].map((v) =>
           v.positions(mode).catch((err: Error) => {
             // One venue being down shouldn't hide the others.
             if (v === this.d.hyperliquid) throw err;
@@ -668,5 +693,6 @@ function describePosition(p: PositionView): string {
   const size = Number(p.size.toFixed(4));
   if (p.venue === "derive") return `${size} contracts of the ${p.symbol} worth ${fmtUsd(p.valueUsd)}${pnl}`;
   if (p.venue === "polymarket") return `${size} shares of ${p.symbol} worth ${fmtUsd(p.valueUsd)}${pnl}`;
+  if (p.venue === "yield") return `${fmtUsd(p.valueUsd)} USDC lent on ${p.symbol}${p.pnlUsd !== null && p.pnlUsd > 0.005 ? ` (+${fmtUsd(p.pnlUsd)} interest)` : ""}`;
   return `${p.size} ${p.symbol} worth ${fmtUsd(p.valueUsd)}${pnl}`;
 }

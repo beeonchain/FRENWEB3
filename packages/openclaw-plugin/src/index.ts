@@ -20,6 +20,7 @@ export const TOOL_NAMES = [
   "fren_deposit_hyperliquid",
   "fren_bet_quote",
   "fren_fund",
+  "fren_yield",
 ] as const;
 
 type ToolName = (typeof TOOL_NAMES)[number];
@@ -140,6 +141,14 @@ export function toolSpecs(client: EngineClient): ToolSpec[] {
         if (!plans.length) return q.text;
         return `${q.text}\n\n(For you, not the owner: the plan for each choice, to pass to fren_trade as-is.)\n${plans.map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join("\n")}`;
       },
+    },
+    {
+      name: "fren_yield",
+      label: "USDC yield",
+      description:
+        "Show current USDC lending rates on Jupiter Lend, Kamino (Solana) and Aave (Arbitrum, Base), and what the owner has lent where. Read-only; deposits and withdrawals go through fren_trade with an earn leg.",
+      parameters: Type.Object({}),
+      run: async () => (await client.call<{ text: string }>("GET", "/yield")).text,
     },
     {
       name: "fren_fund",

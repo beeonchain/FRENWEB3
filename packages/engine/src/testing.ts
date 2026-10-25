@@ -1,4 +1,5 @@
 import type { SignerApi } from "@fren/signer";
+import { encodeAbiParameters } from "viem";
 import { Fren } from "./engine.js";
 import type { Fetch } from "./http.js";
 import { MemoryNotifier } from "./notify.js";
@@ -7,6 +8,10 @@ import { HyperliquidVenue } from "./venues/hyperliquid.js";
 import { JupiterVenue } from "./venues/jupiter.js";
 import type { PumpCurve, PumpFunApi, PumpTrade } from "./venues/pumpfun.js";
 import { RelayVenue } from "./venues/relay.js";
+import { AaveUsdc } from "./venues/aave.js";
+import { JupiterLendUsdc, KAMINO_USDC_RESERVE, KaminoUsdc, type SolanaAccess } from "./venues/solana-lend.js";
+import { USDC_MINT } from "./venues/jupiter.js";
+import { YieldVenue } from "./venues/yield.js";
 import { DeriveVenue, type DeriveInstrument, type DeriveTicker } from "./venues/derive.js";
 import {
   PolymarketVenue,
@@ -150,6 +155,51 @@ export class FakeVenues {
   /** How much of an order the fake Derive fills (1 = all). */
   deriveFillRatio = 1;
 
+  /** Lending: rates, the wallet's idle Solana USDC, and what's lent where. */
+  jupLendRateBps = 569;
+  kaminoSupplyApy = 0.0468;
+  /** Aave's currentLiquidityRate in ray (1e27 = 100% APR). */
+  aaveRateRay = 45n * 10n ** 24n;
+  solanaUsdc = 0;
+  jupLent = 0;
+  kaminoLent = 0;
+  /** Every lending API call that built a transaction. */
+  lendCalls: { path: string; body: Record<string, unknown> }[] = [];
+
+  private lend(url: URL, body: Record<string, unknown>): unknown {
+    const p = url.pathname;
+    if (url.hostname === "lend.test") {
+      if (p === "/earn/tokens") return [{ address: "9BEcn9aPEmhSPbPQeFGjidRiEKki46fVQDyPpSQXPA2D", assetAddress: USDC_MINT, decimals: 6, totalRate: String(this.jupLendRateBps) }];
+      if (p === "/earn/positions") {
+        const owner = url.searchParams.get("users")!;
+        return [{ token: { address: "9BEcn9aPEmhSPbPQeFGjidRiEKki46fVQDyPpSQXPA2D", assetAddress: USDC_MINT, decimals: 6, totalRate: "0" }, ownerAddress: owner, shares: String(Math.round(this.jupLent * 0.94 * 1e6)), underlyingAssets: String(Math.round(this.jupLent * 1e6)) }];
+      }
+      this.lendCalls.push({ path: p, body });
+      const amt = p === "/earn/redeem" ? this.jupLent : Number(body.amount) / 1e6;
+      if (p === "/earn/deposit") {
+        this.jupLent += amt;
+        this.solanaUsdc -= amt;
+      } else {
+        this.jupLent -= amt;
+        this.solanaUsdc += amt;
+      }
+      return { transaction: `jup-tx-${this.lendCalls.length}` };
+    }
+    if (p.endsWith("/reserves/metrics")) return [{ reserve: "SmallUsdcReserve111111111111111111111111111", liquidityTokenMint: USDC_MINT, supplyApy: "0.5" }, { reserve: KAMINO_USDC_RESERVE, liquidityTokenMint: USDC_MINT, supplyApy: String(this.kaminoSupplyApy) }];
+    if (p.endsWith("/obligations")) return this.kaminoLent > 0 ? [{ obligationAddress: "Obligation1", state: { deposits: [{ depositReserve: KAMINO_USDC_RESERVE }] } }] : [];
+    if (p === "/klend/loans/Obligation1") return { loanInfo: { collateral: { deposits: [{ tokenMint: USDC_MINT, tokenAmount: String(this.kaminoLent) }] } } };
+    this.lendCalls.push({ path: p, body });
+    const amt = Number(body.amount);
+    if (p === "/ktx/klend/deposit") {
+      this.kaminoLent += amt;
+      this.solanaUsdc -= amt;
+    } else {
+      this.kaminoLent -= amt;
+      this.solanaUsdc += amt;
+    }
+    return { transaction: `kamino-tx-${this.lendCalls.length}` };
+  }
+
   addOption(name: string, quote: { ask: number; bid: number; spot: number }) {
     this.deriveInstruments.set(name, fakeInstrument(name));
     this.deriveTickers.set(name, { a: String(quote.ask), b: String(quote.bid), A: "100", B: "100", M: String((quote.ask + quote.bid) / 2), I: String(quote.spot) });
@@ -234,6 +284,7 @@ export class FakeVenues {
     const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {};
     const json = (v: unknown, status = 200) => new Response(JSON.stringify(v), { status, headers: { "content-type": "application/json" } });
 
+    if (url.hostname === "lend.test" || url.hostname === "kamino.test") return json(this.lend(url, body));
     if (url.hostname === "derive.test") {
       const h = new Headers(init?.headers);
       const headers = Object.fromEntries(["X-DeriveWallet", "X-DeriveTimestamp", "X-DeriveSignature"].flatMap((k) => (h.get(k) ? [[k, h.get(k)!]] : [])));
@@ -450,6 +501,25 @@ export function buildTestFren(opts: TestFrenOptions = {}) {
     erc20Balance: async (chain, token) => evmBalances[`${chain}:${token.toLowerCase()}`] ?? 0n,
     waitForTx: async (_chain, hash) => void evmTxs.push(hash),
     fillTimeoutMs: 1_000,
+    evmRead: async () => encodeAbiParameters([{ type: "uint256" }, { type: "uint256" }, { type: "uint256" }], [0n, 10n ** 27n, fake.aaveRateRay]),
+  });
+  const solanaSent: { txBase64: string; maxSolSpendLamports: number }[] = [];
+  const solana: SolanaAccess = {
+    ownerAddress: async () => (signer ? (await signer.addresses()).solana : "PaperWa11et1111111111111111111111111111111"),
+    sendApiTransaction: async (txBase64, maxSolSpendLamports) => {
+      solanaSent.push({ txBase64, maxSolSpendLamports });
+      return `sig${solanaSent.length}`;
+    },
+  };
+  const yieldVenue = new YieldVenue({
+    store,
+    protocols: [
+      new JupiterLendUsdc({ fetchFn: fake.fetch, apiUrl: "https://lend.test", solana }),
+      new KaminoUsdc({ fetchFn: fake.fetch, apiUrl: "https://kamino.test", solana }),
+      new AaveUsdc("arbitrum", relay),
+      new AaveUsdc("base", relay),
+    ],
+    walletUsdc: async (chain) => (chain === "solana" ? fake.solanaUsdc : ((await relay.usdcBalances())[chain] ?? 0)),
   });
   const poly = new FakePolymarketData();
   const polyTrader = new FakePolymarketTrader(poly);
@@ -473,7 +543,8 @@ export function buildTestFren(opts: TestFrenOptions = {}) {
     relay,
     derive,
     polymarket,
+    yield: yieldVenue,
   });
   if (opts.live) store.setLimits({ ...store.getLimits(), mode: "live" });
-  return { fake, pump, poly, polyTrader, derive, polymarket, store, notifier, fren, evmTxs };
+  return { fake, pump, poly, polyTrader, derive, polymarket, yield: yieldVenue, solanaSent, evmBalances, store, notifier, fren, evmTxs };
 }

@@ -27,7 +27,14 @@ function pctMove(p: number): string {
   return `${p >= 1 ? p.toFixed(1) : p.toPrecision(2)}%`;
 }
 
-const venueName: Record<string, string> = { hyperliquid: "Hyperliquid", jupiter: "Jupiter", relay: "Relay", derive: "Derive", polymarket: "Polymarket" };
+const venueName: Record<string, string> = { hyperliquid: "Hyperliquid", jupiter: "Jupiter", relay: "Relay", derive: "Derive", polymarket: "Polymarket", yield: "yield" };
+
+export const yieldProtocolName: Record<string, string> = {
+  jupiter_lend: "Jupiter Lend (Solana)",
+  kamino: "Kamino (Solana)",
+  aave_arbitrum: "Aave on Arbitrum",
+  aave_base: "Aave on Base",
+};
 
 export const chainName: Record<string, string> = { solana: "Solana", base: "Base", robinhood: "Robinhood Chain", arbitrum: "Arbitrum" };
 
@@ -117,6 +124,16 @@ export function describeLeg(leg: Leg, resolved?: Pick<ResolvedStep, "symbol" | "
       }
       const amt = leg.amount.type === "fraction" ? `${Math.round(leg.amount.fraction * 100)}% of your` : `${usd(leg.amount.usd)} of your`;
       return `Sell ${amt} "${leg.outcome}" shares in "${market}" on Polymarket`;
+    }
+    case "earn": {
+      // The venue resolves "best" to a protocol and puts its name in symbol.
+      const where = resolved?.symbol ?? (leg.protocol ? yieldProtocolName[leg.protocol] : undefined);
+      if (leg.action === "deposit") {
+        const amt = leg.amount.type === "usd" ? `${usd(leg.amount.usd)} of USDC` : `${Math.round(leg.amount.fraction * 100)}% of your USDC`;
+        return `Lend ${amt} on ${where ?? "the best USDC rate"}`;
+      }
+      const amt = leg.amount.type === "usd" ? `${usd(leg.amount.usd)} of USDC` : leg.amount.fraction >= 1 ? "all your USDC" : `${Math.round(leg.amount.fraction * 100)}% of your USDC`;
+      return `Withdraw ${amt} from ${where ?? "your yield"}`;
     }
   }
 }
