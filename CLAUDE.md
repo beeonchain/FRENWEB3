@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Context for AI coding agents (and humans) working in this repo. Read this first, then `HANDOFF.md` for project status, `docs/SECURITY.md` before touching anything that signs or moves money, and `docs/ROADMAP.md` for what's next.
+Context for AI coding agents (and humans) working in this repo. Read this first, then `HANDOFF.md` for the product vision, end goal and project status, `docs/SECURITY.md` before touching anything that signs or moves money, and `docs/ROADMAP.md` for what's next.
 
 ## What this is
 

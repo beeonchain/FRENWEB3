@@ -2,6 +2,32 @@
 
 Where Fren stands as of November 2026, for the developer taking it over. Technical conventions are in `CLAUDE.md`; the threat model is `docs/SECURITY.md`.
 
+## What Fren is
+
+**One line:** your trading Fren lives in your chats. You text it on Telegram or WhatsApp, and it handles perps, meme coins, options, bets and yield for you. Your keys never leave your own machine or server.
+
+**The problem.** Trading on-chain today means a dozen apps, wallets, bridges and tabs. Hosted "AI trading" products fix the UX, but they hold your keys or your funds, and the open-source agent ecosystem (OpenClaw skills on ClawHub) is full of wallet drainers. People want to say what they want in one message and have it done, without handing anyone their keys.
+
+**What it does.** You write something like "long gold 20x with $500, stop at -30%", "snipe this CA on Base the second it launches", or "best way to bet ETH hits $4k by December, use $1,000". Fren picks the venue, writes a typed plan, checks it against your own limits, signs it with keys that only it holds, and replies once with what it did. Conditional orders ("short SOL when funding goes above 0.02%/h") are watched by a plain daemon, not the AI.
+
+**The core idea, which must never change:** *the AI thinks, it never signs and it never polls.* The model only proposes. Deterministic code enforces limits. A separate signer process holds the keys and refuses anything outside a hard allow-list. Anything risky (big trades, loosening limits, resuming after a stop) needs a code that goes to the owner around the AI. This is what makes Fren safe to run with real money, and it's the main marketing story.
+
+**Who it's for.** Crypto-native traders ("degens") who live in Telegram, trade across chains and venues, and care about self-custody. Secondary: people who want a VPS bot without ever touching a terminal, hence the browser wizard.
+
+**Three non-negotiables** (from the original brief): self-custody by construction, one-message UX, and breadth of venues.
+
+**Competition.** Weft (weft.fi) is the closest hosted product: plain English to rules, trade-only key, but custodial-ish, email sign-in, has a token. CryptoClaw (TermiX, open source) is the closest self-hosted OpenClaw crypto agent. Fren's edge over both: the policy/signer spine, conditional rules with a watcher, the venue breadth (perps + spot + memes + options + Polymarket + cross-chain + yield), and the one-message UX.
+
+**End goal.** A one-command (or zero-terminal) install that anyone can run on their laptop or a $10 VPS, safe enough to trust with real size, covering every venue a degen trades on, from one chat. Concretely, "done" looks like:
+
+1. Live trading verified on every venue, not just paper and testnet.
+2. Install in one command or one browser wizard, with backup and restore.
+3. Hardened for real money: separate OS users by default, on-chain spending limits on Solana (Squads), RPC failover, signed releases.
+4. Richer triggers: wallet activity, X mentions, Polymarket odds, sentiment.
+5. A business model that fits the self-hosted, no-custody design. **Not decided yet.** The brief floated an on-chain volume fee; the lighter-touch options are venue builder/referral fees (Hyperliquid builder code, Jupiter referral). Get a legal read before charging anything, because leveraged perps on stocks and gold, Polymarket and no-KYC hosting together raise real regulatory questions. Ask Bee before building any fee.
+
+**Name.** Started as "Jarvis", then the brief's working title "DegenClaw", now **Fren**. The site, brand book and code all use Fren.
+
 ## Ownership and access
 
 - **Owner:** `beeonchain` keeps ownership of this repo, the Netlify site and the EQVPS account. The new developer works as a collaborator.
